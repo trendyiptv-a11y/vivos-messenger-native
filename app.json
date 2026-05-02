@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "VIVOS Messenger",
+    "slug": "vivos-messenger-native",
+    "scheme": "vivosmessenger",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#163865"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "app.vivos.messenger",
+      "adaptiveIcon": {
+        "backgroundColor": "#163865"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
