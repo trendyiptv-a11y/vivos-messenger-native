@@ -17,6 +17,7 @@ import {
   createWebRtcManager,
   getWebRtcManagerState,
   markWebRtcConnected,
+  prepareWebRtcLocalStream,
 } from "@/lib/calls/webrtc"
 import { buildWebRtcSignalPayload, sendAnswerSignal, sendIceCandidateSignal, sendOfferSignal } from "@/lib/calls/webrtcSignaling"
 import { supabase } from "@/lib/supabase"
@@ -196,6 +197,7 @@ export default function ChatScreen() {
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !userId) return
         await startMedia(payload.callType === "video" ? "video" : "audio")
         await createWebRtcManager(payload.callType === "video" ? "video" : "audio")
+        await prepareWebRtcLocalStream()
         const offer = await createLocalOffer()
         const signalBase = buildWebRtcSignalPayload({
           callSessionId: payload.callSessionId,
@@ -230,6 +232,7 @@ export default function ChatScreen() {
       .on("broadcast", { event: "webrtc_offer" }, async ({ payload }) => {
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !payload?.sdp || !userId) return
         await createWebRtcManager(payload.callType === "video" ? "video" : "audio")
+        await prepareWebRtcLocalStream()
         await applyRemoteDescription(payload.sdp as SessionDescriptionLike)
         const answer = await createLocalAnswer()
         const signalBase = buildWebRtcSignalPayload({
@@ -326,6 +329,7 @@ export default function ChatScreen() {
       setCurrentCallType(callType)
       await startMedia(callType)
       await createWebRtcManager(callType)
+      await prepareWebRtcLocalStream()
       setWebrtcStatus("Media pregătită")
 
       const session = await createOutgoingCallSession({
@@ -383,6 +387,7 @@ export default function ChatScreen() {
       setCallBusy(true)
       await startMedia(incomingCall.callType)
       await createWebRtcManager(incomingCall.callType)
+      await prepareWebRtcLocalStream()
       await supabase
         .from("call_sessions")
         .update({
@@ -619,6 +624,17 @@ export default function ChatScreen() {
             <Text style={styles.callMediaHint}>Descriere locală: {currentWebRtcState?.localDescription?.type ?? "—"}</Text>
             <Text style={styles.callMediaHint}>Descriere remote: {currentWebRtcState?.remoteDescription?.type ?? "—"}</Text>
             <Text style={styles.callMediaHint}>ICE remote: {currentWebRtcState?.remoteCandidates.length ?? 0}</Text>
+            <Text style={styles.callMediaHint}>ICE local: {currentWebRtcState?.localCandidates.length ?? 0}</Text>
+            <Text style={styles.callMediaHint}>TURN servers: {currentWebRtcState?.iceServers.length ?? 0}</Text>
+            <Text style={styles.callMediaHint}>Local stream: {currentWebRtcState?.localStreamReady ? "da" : "nu"}</Text>
+            <Text style={styles.callMediaHint}>Remote stream: {currentWebRtcState?.remoteStreamReady ? "da" : "nu"}</Text>
+            {currentWebRtcState?.diagnostics?.length ? (
+              <View style={styles.diagList}>
+                {currentWebRtcState.diagnostics.map((item, index) => (
+                  <Text key={`${item}-${index}`} style={styles.diagItem}>• {item}</Text>
+                ))}
+              </View>
+            ) : null}
 
             {callUiState === "incoming" ? (
               <View style={styles.callActionsRow}>
@@ -836,6 +852,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 8,
     textAlign: "center",
+  },
+  diagList: {
+    marginTop: 10,
+    alignSelf: "stretch",
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    padding: 12,
+    gap: 4,
+  },
+  diagItem: {
+    color: theme.colors.textSoft,
+    fontSize: 12,
   },
   callActionsRow: {
     flexDirection: "row",
