@@ -2,10 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
+import { RealtimeChannel } from "@supabase/supabase-js"
 import { AppShell } from "@/components/ui/AppShell"
 import { ScreenHeader, HeaderIconButton } from "@/components/ui/ScreenHeader"
+import { useIncomingCallChannel } from "@/hooks/useIncomingCallChannel"
+import { createOutgoingCallSession, endCallSession, logCallEvent } from "@/lib/calls/signaling"
 import { supabase } from "@/lib/supabase"
-import { gradientTextSeed, theme } from "@/lib/theme"
+import { theme } from "@/lib/theme"
+import { CallType, CallUiState, IncomingCall } from "@/types/call"
 
 type MessageRow = {
   id: string
@@ -46,6 +50,7 @@ export default function ChatScreen() {
   const params = useLocalSearchParams<{ id: string }>()
   const conversationId = String(params.id || "")
   const scrollRef = useRef<ScrollView | null>(null)
+  const callChannelRef = useRef<RealtimeChannel | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
@@ -54,6 +59,11 @@ export default function ChatScreen() {
   const [members, setMembers] = useState<MemberRow[]>([])
   const [body, setBody] = useState("")
   const [menuOpen, setMenuOpen] = useState(false)
+  const [callUiState, setCallUiState] = useState<CallUiState>("idle")
+  const [currentCallType, setCurrentCallType] = useState<CallType>("audio")
+  const [callBusy, setCallBusy] = useState(false)
+  const [currentCallSessionId, setCurrentCallSessionId] = useState<string | null>(null)
+  const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null)
 
   useEffect(() => {
     async function loadConversation() {
@@ -141,7 +151,7 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!conversationId) return
 
-    const channel = supabase
+    const messageChannel = supabase
       .channel(`chat-${conversationId}`)
       .on(
         "postgres_changes",
@@ -164,10 +174,53 @@ export default function ChatScreen() {
       )
       .subscribe()
 
+    const callChannel = supabase
+      .channel(`call:conversation:${conversationId}`)
+      .on("broadcast", { event: "call_accept" }, ({ payload }) => {
+        if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId) return
+        setIncomingCall(null)
+        setCallUiState("connected")
+      })
+      .on("broadcast", { event: "call_reject" }, ({ payload }) => {
+        if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId) return
+        setIncomingCall(null)
+        setCurrentCallSessionId(null)
+        setCallUiState("idle")
+      })
+      .on("broadcast", { event: "call_end" }, ({ payload }) => {
+        if (!payload?.callSessionId) return
+        if (currentCallSessionId && payload.callSessionId !== currentCallSessionId) return
+        setIncomingCall(null)
+        setCurrentCallSessionId(null)
+        setCallUiState("idle")
+      })
+      .subscribe()
+
+    callChannelRef.current = callChannel
+
     return () => {
-      supabase.removeChannel(channel)
+      supabase.removeChannel(messageChannel)
+      supabase.removeChannel(callChannel)
+      callChannelRef.current = null
     }
-  }, [conversationId])
+  }, [conversationId, currentCallSessionId])
+
+  useIncomingCallChannel({
+    userId,
+    onIncomingCall: (call) => {
+      if (call.conversationId !== conversationId) return
+      setIncomingCall(call)
+      setCurrentCallSessionId(call.callSessionId)
+      setCurrentCallType(call.callType)
+      setCallUiState("incoming")
+    },
+    onCallEnded: (callSessionId) => {
+      if (currentCallSessionId && callSessionId !== currentCallSessionId) return
+      setIncomingCall(null)
+      setCurrentCallSessionId(null)
+      setCallUiState("idle")
+    },
+  })
 
   useEffect(() => {
     if (!messages.length) return
@@ -196,6 +249,164 @@ export default function ChatScreen() {
     setSending(false)
   }
 
+  async function handleStartCall(callType: CallType) {
+    if (!userId || !otherMember?.member_id || callBusy || callUiState !== "idle") return
+
+    try {
+      setCallBusy(true)
+      setCurrentCallType(callType)
+
+      const session = await createOutgoingCallSession({
+        conversationId,
+        callerId: userId,
+        calleeId: otherMember.member_id,
+        callType,
+      })
+
+      await logCallEvent({
+        callSessionId: session.id,
+        actorId: userId,
+        eventType: "invite",
+        payload: { conversationId, callType },
+      })
+
+      await callChannelRef.current?.send({
+        type: "broadcast",
+        event: "call_invite",
+        payload: {
+          callSessionId: session.id,
+          conversationId,
+          fromUserId: userId,
+          toUserId: otherMember.member_id,
+          callType,
+        },
+      })
+
+      setCurrentCallSessionId(session.id)
+      setCallUiState("outgoing")
+    } catch (error) {
+      console.error("Start call error", error)
+    } finally {
+      setCallBusy(false)
+    }
+  }
+
+  async function handleAcceptCall() {
+    if (!incomingCall?.callSessionId || !userId) return
+
+    try {
+      setCallBusy(true)
+      await supabase
+        .from("call_sessions")
+        .update({
+          status: "accepted",
+          answered_at: new Date().toISOString(),
+          call_type: incomingCall.callType,
+        })
+        .eq("id", incomingCall.callSessionId)
+
+      await logCallEvent({
+        callSessionId: incomingCall.callSessionId,
+        actorId: userId,
+        eventType: "accept",
+        payload: { conversationId, callType: incomingCall.callType },
+      })
+
+      await callChannelRef.current?.send({
+        type: "broadcast",
+        event: "call_accept",
+        payload: {
+          callSessionId: incomingCall.callSessionId,
+          conversationId,
+          fromUserId: userId,
+          callType: incomingCall.callType,
+        },
+      })
+
+      setCurrentCallSessionId(incomingCall.callSessionId)
+      setCurrentCallType(incomingCall.callType)
+      setCallUiState("connected")
+      setIncomingCall(null)
+    } catch (error) {
+      console.error("Accept call error", error)
+    } finally {
+      setCallBusy(false)
+    }
+  }
+
+  async function handleRejectCall() {
+    if (!incomingCall?.callSessionId || !userId) return
+
+    try {
+      setCallBusy(true)
+      await supabase
+        .from("call_sessions")
+        .update({ status: "rejected", ended_at: new Date().toISOString() })
+        .eq("id", incomingCall.callSessionId)
+
+      await logCallEvent({
+        callSessionId: incomingCall.callSessionId,
+        actorId: userId,
+        eventType: "reject",
+        payload: { conversationId },
+      })
+
+      await callChannelRef.current?.send({
+        type: "broadcast",
+        event: "call_reject",
+        payload: {
+          callSessionId: incomingCall.callSessionId,
+          conversationId,
+          fromUserId: userId,
+        },
+      })
+    } catch (error) {
+      console.error("Reject call error", error)
+    } finally {
+      setIncomingCall(null)
+      setCurrentCallSessionId(null)
+      setCallUiState("idle")
+      setCallBusy(false)
+    }
+  }
+
+  async function handleEndCall() {
+    if (!currentCallSessionId || !userId) {
+      setIncomingCall(null)
+      setCallUiState("idle")
+      return
+    }
+
+    try {
+      setCallBusy(true)
+      await endCallSession(currentCallSessionId)
+      await logCallEvent({
+        callSessionId: currentCallSessionId,
+        actorId: userId,
+        eventType: "end",
+        payload: { conversationId, callType: currentCallType },
+      })
+
+      await callChannelRef.current?.send({
+        type: "broadcast",
+        event: "call_end",
+        payload: {
+          callSessionId: currentCallSessionId,
+          conversationId,
+          fromUserId: userId,
+          callType: currentCallType,
+        },
+      })
+    } catch (error) {
+      console.error("End call error", error)
+    } finally {
+      setIncomingCall(null)
+      setCurrentCallSessionId(null)
+      setCallUiState("idle")
+      setCallBusy(false)
+    }
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut()
     router.replace("/login")
@@ -212,10 +423,10 @@ export default function ChatScreen() {
         }
         right={
           <View style={styles.headerRight}>
-            <HeaderIconButton onPress={() => {}}>
+            <HeaderIconButton onPress={() => handleStartCall("audio")}>
               <Ionicons name="call-outline" size={19} color={theme.colors.text} />
             </HeaderIconButton>
-            <HeaderIconButton onPress={() => {}}>
+            <HeaderIconButton onPress={() => handleStartCall("video")}>
               <Ionicons name="videocam-outline" size={19} color={theme.colors.text} />
             </HeaderIconButton>
             <View>
@@ -282,6 +493,48 @@ export default function ChatScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {callUiState !== "idle" ? (
+        <View style={styles.callOverlay}>
+          <View style={styles.callCard}>
+            <View style={styles.callAvatarCircle}>
+              <Text style={styles.callAvatarText}>{otherName.slice(0, 2).toUpperCase()}</Text>
+            </View>
+            <Text style={styles.callName}>{otherName}</Text>
+            <Text style={styles.callStatus}>
+              {callUiState === "incoming"
+                ? currentCallType === "video"
+                  ? "Apel video primit"
+                  : "Apel audio primit"
+                : callUiState === "outgoing"
+                  ? currentCallType === "video"
+                    ? "Se apelează video..."
+                    : "Se apelează audio..."
+                  : currentCallType === "video"
+                    ? "Apel video conectat"
+                    : "Apel audio conectat"}
+            </Text>
+
+            {callUiState === "incoming" ? (
+              <View style={styles.callActionsRow}>
+                <Pressable onPress={handleAcceptCall} disabled={callBusy} style={[styles.callActionButton, styles.callAcceptButton]}>
+                  <Ionicons name="call" size={20} color="white" />
+                  <Text style={styles.callActionText}>Răspunde</Text>
+                </Pressable>
+                <Pressable onPress={handleRejectCall} disabled={callBusy} style={[styles.callActionButton, styles.callRejectButton]}>
+                  <Ionicons name="call-outline" size={20} color="white" />
+                  <Text style={styles.callActionText}>Respinge</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable onPress={handleEndCall} disabled={callBusy} style={[styles.callActionButton, styles.callRejectButton, styles.callEndSingle]}>
+                <Ionicons name="call-outline" size={20} color="white" />
+                <Text style={styles.callActionText}>{callUiState === "connected" ? "Închide apelul" : "Anulează apelul"}</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+      ) : null}
     </AppShell>
   )
 }
@@ -431,5 +684,77 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     opacity: 0.45,
+  },
+  callOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(5,10,20,0.72)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  callCard: {
+    width: "100%",
+    borderRadius: 30,
+    padding: 24,
+    backgroundColor: "rgba(18,46,84,0.98)",
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: "center",
+  },
+  callAvatarCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(154,113,193,0.65)",
+  },
+  callAvatarText: {
+    color: "white",
+    fontSize: 30,
+    fontWeight: "800",
+  },
+  callName: {
+    color: theme.colors.text,
+    fontSize: 24,
+    fontWeight: "800",
+    marginTop: 18,
+  },
+  callStatus: {
+    color: theme.colors.textSoft,
+    fontSize: 16,
+    marginTop: 10,
+    textAlign: "center",
+  },
+  callActionsRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 24,
+    width: "100%",
+  },
+  callActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    minHeight: 54,
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    flex: 1,
+  },
+  callAcceptButton: {
+    backgroundColor: "#0F9D58",
+  },
+  callRejectButton: {
+    backgroundColor: "#D93025",
+  },
+  callEndSingle: {
+    marginTop: 24,
+    width: "100%",
+  },
+  callActionText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "700",
   },
 })
