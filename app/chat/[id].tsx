@@ -21,6 +21,11 @@ type MemberRow = {
   email: string | null
 }
 
+type NotificationRefRow = {
+  id: string
+  ref_id: string | null
+}
+
 function formatDay(dateString: string) {
   return new Date(dateString).toLocaleDateString("ro-RO", {
     day: "2-digit",
@@ -91,6 +96,47 @@ export default function ChatScreen() {
       loadConversation()
     }
   }, [conversationId, router])
+
+  useEffect(() => {
+    async function markConversationNotificationsRead() {
+      if (!userId || !conversationId) return
+
+      const { data: unreadNotifications } = await supabase
+        .from("notifications")
+        .select("id, ref_id")
+        .eq("event_type", "new_message")
+        .eq("is_read", false)
+        .eq("user_id", userId)
+
+      const messageIds = ((unreadNotifications ?? []) as NotificationRefRow[])
+        .map((item) => item.ref_id)
+        .filter((value): value is string => !!value)
+
+      if (!messageIds.length) return
+
+      const { data: messageRows } = await supabase
+        .from("messages")
+        .select("id, conversation_id")
+        .in("id", messageIds)
+        .eq("conversation_id", conversationId)
+
+      const targetMessageIds = new Set(((messageRows ?? []) as any[]).map((row) => row.id))
+      if (!targetMessageIds.size) return
+
+      const notificationIdsToMark = ((unreadNotifications ?? []) as NotificationRefRow[])
+        .filter((item) => item.ref_id && targetMessageIds.has(item.ref_id))
+        .map((item) => item.id)
+
+      if (!notificationIdsToMark.length) return
+
+      await supabase
+        .from("notifications")
+        .update({ is_read: true })
+        .in("id", notificationIdsToMark)
+    }
+
+    markConversationNotificationsRead()
+  }, [conversationId, userId, messages.length])
 
   useEffect(() => {
     if (!conversationId) return
