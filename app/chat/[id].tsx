@@ -12,11 +12,9 @@ import { MessageBubbleList } from "@/components/messenger/MessageBubbleList"
 import { useChatCallFlow } from "@/hooks/useChatCallFlow"
 import { useChatConversation } from "@/hooks/useChatConversation"
 import { useIncomingCallChannel } from "@/hooks/useIncomingCallChannel"
-import { logCallEvent } from "@/lib/calls/signaling"
 import {
   addRemoteIceCandidate,
   applyRemoteDescription,
-  closeWebRtcManager,
   createLocalAnswer,
   createLocalOffer,
   createWebRtcManager,
@@ -64,7 +62,6 @@ export default function ChatScreenIntegrated() {
     currentCallType,
     callBusy,
     currentCallSessionId,
-    incomingCall,
     webrtcStatus,
     mediaReady,
     startMedia,
@@ -74,6 +71,9 @@ export default function ChatScreenIntegrated() {
     setCallUiState,
     setWebrtcStatus,
     startOutgoingCall,
+    acceptIncomingCall,
+    rejectIncomingCall,
+    stopCurrentCall,
     resetCallFlow,
   } = useChatCallFlow({
     conversationId,
@@ -192,114 +192,6 @@ export default function ChatScreenIntegrated() {
     })
   }
 
-  async function handleAcceptCall() {
-    if (!incomingCall?.callSessionId || !userId) return
-
-    try {
-      await startMedia(incomingCall.callType)
-      await createWebRtcManager(incomingCall.callType)
-      await prepareWebRtcLocalStream()
-      await supabase
-        .from("call_sessions")
-        .update({
-          status: "accepted",
-          answered_at: new Date().toISOString(),
-          call_type: incomingCall.callType,
-        })
-        .eq("id", incomingCall.callSessionId)
-
-      await logCallEvent({
-        callSessionId: incomingCall.callSessionId,
-        actorId: userId,
-        eventType: "accept",
-        payload: { conversationId, callType: incomingCall.callType },
-      })
-
-      await callChannelRef.current?.send({
-        type: "broadcast",
-        event: "call_accept",
-        payload: {
-          callSessionId: incomingCall.callSessionId,
-          conversationId,
-          fromUserId: userId,
-          callType: incomingCall.callType,
-        },
-      })
-
-      setWebrtcStatus("Acceptat, aștept offer")
-      setCurrentCallSessionId(incomingCall.callSessionId)
-      setCurrentCallType(incomingCall.callType)
-      setCallUiState("connected")
-      setIncomingCall(null)
-    } catch (error) {
-      console.error("Accept call error", error)
-      await resetCallFlow("Eroare la acceptare")
-    }
-  }
-
-  async function handleRejectCall() {
-    if (!incomingCall?.callSessionId || !userId) return
-
-    try {
-      await supabase
-        .from("call_sessions")
-        .update({ status: "rejected", ended_at: new Date().toISOString() })
-        .eq("id", incomingCall.callSessionId)
-
-      await logCallEvent({
-        callSessionId: incomingCall.callSessionId,
-        actorId: userId,
-        eventType: "reject",
-        payload: { conversationId },
-      })
-
-      await callChannelRef.current?.send({
-        type: "broadcast",
-        event: "call_reject",
-        payload: {
-          callSessionId: incomingCall.callSessionId,
-          conversationId,
-          fromUserId: userId,
-        },
-      })
-    } catch (error) {
-      console.error("Reject call error", error)
-    } finally {
-      await resetCallFlow("Respins")
-    }
-  }
-
-  async function handleEndCall() {
-    if (!currentCallSessionId || !userId) {
-      await resetCallFlow("Închis")
-      return
-    }
-
-    try {
-      await logCallEvent({
-        callSessionId: currentCallSessionId,
-        actorId: userId,
-        eventType: "end",
-        payload: { conversationId, callType: currentCallType },
-      })
-
-      await callChannelRef.current?.send({
-        type: "broadcast",
-        event: "call_end",
-        payload: {
-          callSessionId: currentCallSessionId,
-          conversationId,
-          fromUserId: userId,
-          callType: currentCallType,
-        },
-      })
-    } catch (error) {
-      console.error("End call error", error)
-    } finally {
-      await resetCallFlow("Închis")
-    }
-  }
-
   async function handleLogout() {
     await supabase.auth.signOut()
     router.replace("/login")
@@ -356,9 +248,9 @@ export default function ChatScreenIntegrated() {
         webrtcStatus={webrtcStatus}
         currentWebRtcState={currentWebRtcState}
         callBusy={callBusy}
-        onAccept={handleAcceptCall}
-        onReject={handleRejectCall}
-        onEnd={handleEndCall}
+        onAccept={acceptIncomingCall}
+        onReject={rejectIncomingCall}
+        onEnd={stopCurrentCall}
       />
     </AppShell>
   )
