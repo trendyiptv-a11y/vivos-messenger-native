@@ -2,7 +2,7 @@ import { useCallback, useState } from "react"
 import { RealtimeChannel } from "@supabase/supabase-js"
 import { CallType, CallUiState, IncomingCall } from "@/types/call"
 import { createOutgoingCallSession, endCallSession, logCallEvent } from "@/lib/calls/signaling"
-import { createWebRtcManager, prepareWebRtcLocalStream, closeWebRtcManager } from "@/lib/calls/webrtc"
+import { closeWebRtcManager, createWebRtcManager, prepareWebRtcLocalStream } from "@/lib/calls/webrtc"
 import { useCallMedia } from "@/hooks/useCallMedia"
 
 type Args = {
@@ -21,6 +21,15 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
   const [webrtcStatus, setWebrtcStatus] = useState("Inactiv")
 
   const { mediaReady, startMedia, stopMedia } = useCallMedia()
+
+  const resetCallFlow = useCallback(async (status = "Închis") => {
+    await stopMedia()
+    await closeWebRtcManager()
+    setIncomingCall(null)
+    setCurrentCallSessionId(null)
+    setCallUiState("idle")
+    setWebrtcStatus(status)
+  }, [stopMedia])
 
   const startOutgoingCall = useCallback(async (callType: CallType) => {
     if (!userId || !calleeId || callBusy || callUiState !== "idle") return
@@ -61,14 +70,15 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
 
       setCurrentCallSessionId(session.id)
       setCallUiState("outgoing")
+      return session
     } catch (error) {
       console.error("startOutgoingCall error", error)
-      await stopMedia()
-      await closeWebRtcManager()
+      await resetCallFlow("Eroare la pornire")
+      return null
     } finally {
       setCallBusy(false)
     }
-  }, [userId, calleeId, callBusy, callUiState, startMedia, conversationId, callChannelRef, stopMedia])
+  }, [userId, calleeId, callBusy, callUiState, startMedia, conversationId, callChannelRef, resetCallFlow])
 
   const stopCurrentCall = useCallback(async () => {
     try {
@@ -78,14 +88,9 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
     } catch (error) {
       console.error("stopCurrentCall error", error)
     } finally {
-      await stopMedia()
-      await closeWebRtcManager()
-      setIncomingCall(null)
-      setCurrentCallSessionId(null)
-      setCallUiState("idle")
-      setWebrtcStatus("Închis")
+      await resetCallFlow("Închis")
     }
-  }, [currentCallSessionId, stopMedia])
+  }, [currentCallSessionId, resetCallFlow])
 
   return {
     callUiState,
@@ -95,6 +100,8 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
     incomingCall,
     webrtcStatus,
     mediaReady,
+    startMedia,
+    stopMedia,
     setIncomingCall,
     setCurrentCallSessionId,
     setCurrentCallType,
@@ -102,5 +109,6 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
     setWebrtcStatus,
     startOutgoingCall,
     stopCurrentCall,
+    resetCallFlow,
   }
 }
