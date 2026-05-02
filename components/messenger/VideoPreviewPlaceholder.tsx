@@ -1,13 +1,19 @@
 import { StyleSheet, Text, View } from "react-native"
 import { theme } from "@/lib/theme"
+import { NativeVideoSurface } from "@/components/messenger/NativeVideoSurface"
 
 type Props = {
   label: string
   ready: boolean
   compact?: boolean
+  streamURL?: string | null
 }
 
-export function VideoPreviewPlaceholder({ label, ready, compact = false }: Props) {
+export function VideoPreviewPlaceholder({ label, ready, compact = false, streamURL = null }: Props) {
+  if (streamURL) {
+    return <NativeVideoSurface label={label} streamURL={streamURL} compact={compact} />
+  }
+
   return (
     <View style={[styles.box, compact && styles.boxCompact, ready ? styles.ready : styles.waiting]}>
       <Text style={styles.label}>{label}</Text>
