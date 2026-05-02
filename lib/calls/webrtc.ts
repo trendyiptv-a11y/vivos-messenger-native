@@ -11,6 +11,7 @@ import {
   getNativeWebRtcSession,
   markNativeRemoteStreamReady,
   prepareNativeLocalStream,
+  setNativeIceCandidateHandler,
 } from "@/lib/calls/webrtcNativeAdapter"
 
 export type WebRtcManagerState = {
@@ -30,6 +31,7 @@ export type WebRtcManagerState = {
 }
 
 let currentState: WebRtcManagerState | null = null
+let externalLocalIceHandler: ((candidate: IceCandidateLike) => Promise<void> | void) | null = null
 
 function pushDiagnostic(message: string) {
   if (!currentState) return
@@ -50,9 +52,29 @@ function syncNativeFlags() {
   currentState.diagnostics = combined.slice(-10)
 }
 
+function bindNativeIceHandler() {
+  setNativeIceCandidateHandler(async (candidate) => {
+    if (currentState) {
+      currentState.localCandidates.push(candidate)
+      pushDiagnostic("ICE local pregătit")
+    }
+
+    if (externalLocalIceHandler) {
+      await externalLocalIceHandler(candidate)
+    }
+  })
+}
+
+export function setLocalIceCandidateHandler(
+  handler: ((candidate: IceCandidateLike) => Promise<void> | void) | null
+) {
+  externalLocalIceHandler = handler
+  bindNativeIceHandler()
+}
+
 export async function createWebRtcManager(callType: CallType) {
   const { iceServers } = await loadTurnCredentials().catch(() => ({ iceServers: [] as IceServerConfig[] }))
-  await createNativeWebRtcSession(callType)
+  await createNativeWebRtcSession(callType, iceServers)
 
   currentState = {
     callType,
@@ -70,6 +92,7 @@ export async function createWebRtcManager(callType: CallType) {
     connectionState: "new",
   }
 
+  bindNativeIceHandler()
   pushDiagnostic(`Manager creat pentru ${callType}`)
   pushDiagnostic(`ICE servers: ${iceServers.length}`)
   syncNativeFlags()
@@ -151,6 +174,8 @@ export async function markWebRtcConnected() {
 }
 
 export async function closeWebRtcManager() {
+  setNativeIceCandidateHandler(null)
+  externalLocalIceHandler = null
   await closeNativeWebRtcSession()
   currentState = null
 }
