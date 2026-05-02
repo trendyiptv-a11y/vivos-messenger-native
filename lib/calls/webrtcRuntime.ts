@@ -6,11 +6,27 @@ export type WebRtcRuntimeState = {
 }
 
 export function getWebRtcRuntimeState(): WebRtcRuntimeState {
+  try {
+    const moduleRef = require("react-native-webrtc")
+    const ready = Boolean(moduleRef?.RTCPeerConnection && moduleRef?.mediaDevices)
+
+    if (ready) {
+      return {
+        adapterInstalled: true,
+        devBuildRequired: true,
+        readyForNativeStreams: true,
+        note: "Adapterul nativ WebRTC este disponibil în acest build.",
+      }
+    }
+  } catch {
+    // fallback below
+  }
+
   return {
     adapterInstalled: false,
     devBuildRequired: true,
     readyForNativeStreams: false,
-    note: "Adapterul real WebRTC nu este încă instalat. Următorul pas este integrarea bibliotecii native și trecerea pe dev build.",
+    note: "Adapterul real WebRTC nu este încă disponibil în build-ul curent. Creează un development build nou după instalarea dependențelor native.",
   }
 }
 
