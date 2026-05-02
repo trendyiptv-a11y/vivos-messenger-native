@@ -1,7 +1,13 @@
 import { useCallback, useState } from "react"
 import { RealtimeChannel } from "@supabase/supabase-js"
 import { CallType, CallUiState, IncomingCall } from "@/types/call"
-import { createOutgoingCallSession, endCallSession, logCallEvent } from "@/lib/calls/signaling"
+import {
+  acceptCallSession,
+  createOutgoingCallSession,
+  endCallSession,
+  logCallEvent,
+  rejectCallSession,
+} from "@/lib/calls/signaling"
 import { closeWebRtcManager, createWebRtcManager, prepareWebRtcLocalStream } from "@/lib/calls/webrtc"
 import { useCallMedia } from "@/hooks/useCallMedia"
 
@@ -80,17 +86,111 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
     }
   }, [userId, calleeId, callBusy, callUiState, startMedia, conversationId, callChannelRef, resetCallFlow])
 
+  const acceptIncomingCall = useCallback(async () => {
+    if (!incomingCall?.callSessionId || !userId) return false
+
+    try {
+      setCallBusy(true)
+      await startMedia(incomingCall.callType)
+      await createWebRtcManager(incomingCall.callType)
+      await prepareWebRtcLocalStream()
+      await acceptCallSession(incomingCall.callSessionId, incomingCall.callType)
+
+      await logCallEvent({
+        callSessionId: incomingCall.callSessionId,
+        actorId: userId,
+        eventType: "accept",
+        payload: { conversationId, callType: incomingCall.callType },
+      })
+
+      await callChannelRef.current?.send({
+        type: "broadcast",
+        event: "call_accept",
+        payload: {
+          callSessionId: incomingCall.callSessionId,
+          conversationId,
+          fromUserId: userId,
+          callType: incomingCall.callType,
+        },
+      })
+
+      setWebrtcStatus("Acceptat, aștept offer")
+      setCurrentCallSessionId(incomingCall.callSessionId)
+      setCurrentCallType(incomingCall.callType)
+      setCallUiState("connected")
+      setIncomingCall(null)
+      return true
+    } catch (error) {
+      console.error("acceptIncomingCall error", error)
+      await resetCallFlow("Eroare la acceptare")
+      return false
+    } finally {
+      setCallBusy(false)
+    }
+  }, [incomingCall, userId, startMedia, conversationId, callChannelRef, resetCallFlow])
+
+  const rejectIncomingCall = useCallback(async () => {
+    if (!incomingCall?.callSessionId || !userId) return
+
+    try {
+      setCallBusy(true)
+      await rejectCallSession(incomingCall.callSessionId)
+
+      await logCallEvent({
+        callSessionId: incomingCall.callSessionId,
+        actorId: userId,
+        eventType: "reject",
+        payload: { conversationId },
+      })
+
+      await callChannelRef.current?.send({
+        type: "broadcast",
+        event: "call_reject",
+        payload: {
+          callSessionId: incomingCall.callSessionId,
+          conversationId,
+          fromUserId: userId,
+        },
+      })
+    } catch (error) {
+      console.error("rejectIncomingCall error", error)
+    } finally {
+      await resetCallFlow("Respins")
+      setCallBusy(false)
+    }
+  }, [incomingCall, userId, conversationId, callChannelRef, resetCallFlow])
+
   const stopCurrentCall = useCallback(async () => {
     try {
       if (currentCallSessionId) {
         await endCallSession(currentCallSessionId)
+
+        if (userId) {
+          await logCallEvent({
+            callSessionId: currentCallSessionId,
+            actorId: userId,
+            eventType: "end",
+            payload: { conversationId, callType: currentCallType },
+          })
+        }
+
+        await callChannelRef.current?.send({
+          type: "broadcast",
+          event: "call_end",
+          payload: {
+            callSessionId: currentCallSessionId,
+            conversationId,
+            fromUserId: userId,
+            callType: currentCallType,
+          },
+        })
       }
     } catch (error) {
       console.error("stopCurrentCall error", error)
     } finally {
       await resetCallFlow("Închis")
     }
-  }, [currentCallSessionId, resetCallFlow])
+  }, [currentCallSessionId, userId, conversationId, currentCallType, callChannelRef, resetCallFlow])
 
   return {
     callUiState,
@@ -108,6 +208,8 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
     setCallUiState,
     setWebrtcStatus,
     startOutgoingCall,
+    acceptIncomingCall,
+    rejectIncomingCall,
     stopCurrentCall,
     resetCallFlow,
   }
