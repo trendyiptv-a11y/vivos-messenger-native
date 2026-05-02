@@ -1,8 +1,9 @@
 import { Stack, useRouter, useSegments } from "expo-router"
-import { ActivityIndicator, View } from "react-native"
+import { ActivityIndicator, AppState, View } from "react-native"
 import { StatusBar } from "expo-status-bar"
 import { useEffect } from "react"
 import { useAuthSession } from "@/hooks/useAuthSession"
+import { clearNativeBadge, requestNotificationPermissions } from "@/lib/notifications"
 import { theme } from "@/lib/theme"
 
 export default function RootLayout() {
@@ -23,6 +24,19 @@ export default function RootLayout() {
       router.replace("/inbox")
     }
   }, [isAuthenticated, loading, segments, router])
+
+  useEffect(() => {
+    requestNotificationPermissions()
+    clearNativeBadge()
+
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        clearNativeBadge()
+      }
+    })
+
+    return () => subscription.remove()
+  }, [])
 
   if (loading) {
     return (
