@@ -39,6 +39,28 @@ export async function logCallEvent(args: {
   if (error) throw error
 }
 
+export async function acceptCallSession(callSessionId: string, callType: CallType) {
+  const { error } = await supabase
+    .from("call_sessions")
+    .update({
+      status: "accepted",
+      answered_at: new Date().toISOString(),
+      call_type: callType,
+    })
+    .eq("id", callSessionId)
+
+  if (error) throw error
+}
+
+export async function rejectCallSession(callSessionId: string) {
+  const { error } = await supabase
+    .from("call_sessions")
+    .update({ status: "rejected", ended_at: new Date().toISOString() })
+    .eq("id", callSessionId)
+
+  if (error) throw error
+}
+
 export async function endCallSession(callSessionId: string) {
   const { error } = await supabase
     .from("call_sessions")
