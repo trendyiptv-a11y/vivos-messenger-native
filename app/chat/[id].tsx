@@ -9,10 +9,10 @@ import { ScreenHeader, HeaderIconButton } from "@/components/ui/ScreenHeader"
 import { CallOverlay } from "@/components/messenger/CallOverlay"
 import { ChatInputBar } from "@/components/messenger/ChatInputBar"
 import { MessageBubbleList } from "@/components/messenger/MessageBubbleList"
+import { useChatCallFlow } from "@/hooks/useChatCallFlow"
 import { useChatConversation } from "@/hooks/useChatConversation"
-import { useCallMedia } from "@/hooks/useCallMedia"
 import { useIncomingCallChannel } from "@/hooks/useIncomingCallChannel"
-import { createOutgoingCallSession, endCallSession, logCallEvent } from "@/lib/calls/signaling"
+import { logCallEvent } from "@/lib/calls/signaling"
 import {
   addRemoteIceCandidate,
   applyRemoteDescription,
@@ -26,7 +26,7 @@ import {
 } from "@/lib/calls/webrtc"
 import { buildWebRtcSignalPayload, sendAnswerSignal, sendIceCandidateSignal, sendOfferSignal } from "@/lib/calls/webrtcSignaling"
 import { theme } from "@/lib/theme"
-import { CallType, CallUiState, IncomingCall } from "@/types/call"
+import { CallType } from "@/types/call"
 import { IceCandidateLike, SessionDescriptionLike } from "@/types/webrtc"
 
 type CallBroadcastPayload = {
@@ -58,14 +58,29 @@ export default function ChatScreenIntegrated() {
   } = useChatConversation(conversationId)
 
   const [menuOpen, setMenuOpen] = useState(false)
-  const [callUiState, setCallUiState] = useState<CallUiState>("idle")
-  const [currentCallType, setCurrentCallType] = useState<CallType>("audio")
-  const [callBusy, setCallBusy] = useState(false)
-  const [currentCallSessionId, setCurrentCallSessionId] = useState<string | null>(null)
-  const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null)
-  const [webrtcStatus, setWebrtcStatus] = useState<string>("Inactiv")
 
-  const { mediaReady, startMedia, stopMedia } = useCallMedia()
+  const {
+    callUiState,
+    currentCallType,
+    callBusy,
+    currentCallSessionId,
+    incomingCall,
+    webrtcStatus,
+    mediaReady,
+    startMedia,
+    setIncomingCall,
+    setCurrentCallSessionId,
+    setCurrentCallType,
+    setCallUiState,
+    setWebrtcStatus,
+    startOutgoingCall,
+    resetCallFlow,
+  } = useChatCallFlow({
+    conversationId,
+    userId,
+    calleeId: otherMember?.member_id ?? null,
+    callChannelRef,
+  })
 
   useEffect(() => {
     if (!conversationId) return
@@ -93,22 +108,12 @@ export default function ChatScreenIntegrated() {
       })
       .on("broadcast", { event: "call_reject" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId) return
-        await stopMedia()
-        await closeWebRtcManager()
-        setWebrtcStatus("Respins")
-        setIncomingCall(null)
-        setCurrentCallSessionId(null)
-        setCallUiState("idle")
+        await resetCallFlow("Respins")
       })
       .on("broadcast", { event: "call_end" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
         if (!payload?.callSessionId) return
         if (currentCallSessionId && payload.callSessionId !== currentCallSessionId) return
-        await stopMedia()
-        await closeWebRtcManager()
-        setWebrtcStatus("Închis")
-        setIncomingCall(null)
-        setCurrentCallSessionId(null)
-        setCallUiState("idle")
+        await resetCallFlow("Închis")
       })
       .on("broadcast", { event: "webrtc_offer" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !payload?.sdp || !userId) return
@@ -146,7 +151,7 @@ export default function ChatScreenIntegrated() {
       callChannelRef.current = null
       supabase.removeChannel(callChannel)
     }
-  }, [conversationId, currentCallSessionId, startMedia, stopMedia, userId])
+  }, [conversationId, currentCallSessionId, resetCallFlow, setCallUiState, setCurrentCallType, setIncomingCall, setWebrtcStatus, startMedia, userId])
 
   useIncomingCallChannel({
     userId,
@@ -160,86 +165,37 @@ export default function ChatScreenIntegrated() {
     },
     onCallEnded: async (callSessionId) => {
       if (currentCallSessionId && callSessionId !== currentCallSessionId) return
-      await stopMedia()
-      await closeWebRtcManager()
-      setWebrtcStatus("Închis")
-      setIncomingCall(null)
-      setCurrentCallSessionId(null)
-      setCallUiState("idle")
+      await resetCallFlow("Închis")
     },
   })
 
   useEffect(() => {
     return () => {
-      stopMedia()
-      closeWebRtcManager()
+      resetCallFlow("Închis")
     }
-  }, [stopMedia])
+  }, [resetCallFlow])
 
   async function handleStartCall(callType: CallType) {
-    if (!userId || !otherMember?.member_id || callBusy || callUiState !== "idle") return
+    const session = await startOutgoingCall(callType)
+    if (!session || !userId) return
 
-    try {
-      setCallBusy(true)
-      setCurrentCallType(callType)
-      await startMedia(callType)
-      await createWebRtcManager(callType)
-      await prepareWebRtcLocalStream()
-      setWebrtcStatus("Media pregătită")
+    const signalBase = buildWebRtcSignalPayload({
+      callSessionId: session.id,
+      conversationId,
+      fromUserId: userId,
+      callType,
+    })
 
-      const session = await createOutgoingCallSession({
-        conversationId,
-        callerId: userId,
-        calleeId: otherMember.member_id,
-        callType,
-      })
-
-      await logCallEvent({
-        callSessionId: session.id,
-        actorId: userId,
-        eventType: "invite",
-        payload: { conversationId, callType },
-      })
-
-      await callChannelRef.current?.send({
-        type: "broadcast",
-        event: "call_invite",
-        payload: {
-          callSessionId: session.id,
-          conversationId,
-          fromUserId: userId,
-          toUserId: otherMember.member_id,
-          callType,
-        },
-      })
-
-      const signalBase = buildWebRtcSignalPayload({
-        callSessionId: session.id,
-        conversationId,
-        fromUserId: userId,
-        callType,
-      })
-      await sendIceCandidateSignal(callChannelRef.current, {
-        ...signalBase,
-        candidate: { candidate: "TODO_NATIVE_ICE_CANDIDATE", sdpMid: "0", sdpMLineIndex: 0 },
-      })
-
-      setCurrentCallSessionId(session.id)
-      setCallUiState("outgoing")
-    } catch (error) {
-      console.error("Start call error", error)
-      await stopMedia()
-      await closeWebRtcManager()
-    } finally {
-      setCallBusy(false)
-    }
+    await sendIceCandidateSignal(callChannelRef.current, {
+      ...signalBase,
+      candidate: { candidate: "TODO_NATIVE_ICE_CANDIDATE", sdpMid: "0", sdpMLineIndex: 0 },
+    })
   }
 
   async function handleAcceptCall() {
     if (!incomingCall?.callSessionId || !userId) return
 
     try {
-      setCallBusy(true)
       await startMedia(incomingCall.callType)
       await createWebRtcManager(incomingCall.callType)
       await prepareWebRtcLocalStream()
@@ -277,10 +233,7 @@ export default function ChatScreenIntegrated() {
       setIncomingCall(null)
     } catch (error) {
       console.error("Accept call error", error)
-      await stopMedia()
-      await closeWebRtcManager()
-    } finally {
-      setCallBusy(false)
+      await resetCallFlow("Eroare la acceptare")
     }
   }
 
@@ -288,7 +241,6 @@ export default function ChatScreenIntegrated() {
     if (!incomingCall?.callSessionId || !userId) return
 
     try {
-      setCallBusy(true)
       await supabase
         .from("call_sessions")
         .update({ status: "rejected", ended_at: new Date().toISOString() })
@@ -313,28 +265,17 @@ export default function ChatScreenIntegrated() {
     } catch (error) {
       console.error("Reject call error", error)
     } finally {
-      await stopMedia()
-      await closeWebRtcManager()
-      setWebrtcStatus("Respins")
-      setIncomingCall(null)
-      setCurrentCallSessionId(null)
-      setCallUiState("idle")
-      setCallBusy(false)
+      await resetCallFlow("Respins")
     }
   }
 
   async function handleEndCall() {
     if (!currentCallSessionId || !userId) {
-      await stopMedia()
-      await closeWebRtcManager()
-      setIncomingCall(null)
-      setCallUiState("idle")
+      await resetCallFlow("Închis")
       return
     }
 
     try {
-      setCallBusy(true)
-      await endCallSession(currentCallSessionId)
       await logCallEvent({
         callSessionId: currentCallSessionId,
         actorId: userId,
@@ -355,13 +296,7 @@ export default function ChatScreenIntegrated() {
     } catch (error) {
       console.error("End call error", error)
     } finally {
-      await stopMedia()
-      await closeWebRtcManager()
-      setWebrtcStatus("Închis")
-      setIncomingCall(null)
-      setCurrentCallSessionId(null)
-      setCallUiState("idle")
-      setCallBusy(false)
+      await resetCallFlow("Închis")
     }
   }
 
