@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons"
 import { RealtimeChannel } from "@supabase/supabase-js"
 import { AppShell } from "@/components/ui/AppShell"
 import { ScreenHeader, HeaderIconButton } from "@/components/ui/ScreenHeader"
+import { useCallMedia } from "@/hooks/useCallMedia"
 import { useIncomingCallChannel } from "@/hooks/useIncomingCallChannel"
 import { createOutgoingCallSession, endCallSession, logCallEvent } from "@/lib/calls/signaling"
 import { supabase } from "@/lib/supabase"
@@ -64,6 +65,8 @@ export default function ChatScreen() {
   const [callBusy, setCallBusy] = useState(false)
   const [currentCallSessionId, setCurrentCallSessionId] = useState<string | null>(null)
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null)
+
+  const { mediaReady, startMedia, stopMedia } = useCallMedia()
 
   useEffect(() => {
     async function loadConversation() {
@@ -176,20 +179,23 @@ export default function ChatScreen() {
 
     const callChannel = supabase
       .channel(`call:conversation:${conversationId}`)
-      .on("broadcast", { event: "call_accept" }, ({ payload }) => {
+      .on("broadcast", { event: "call_accept" }, async ({ payload }) => {
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId) return
+        await startMedia(payload.callType === "video" ? "video" : "audio")
         setIncomingCall(null)
         setCallUiState("connected")
       })
-      .on("broadcast", { event: "call_reject" }, ({ payload }) => {
+      .on("broadcast", { event: "call_reject" }, async ({ payload }) => {
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId) return
+        await stopMedia()
         setIncomingCall(null)
         setCurrentCallSessionId(null)
         setCallUiState("idle")
       })
-      .on("broadcast", { event: "call_end" }, ({ payload }) => {
+      .on("broadcast", { event: "call_end" }, async ({ payload }) => {
         if (!payload?.callSessionId) return
         if (currentCallSessionId && payload.callSessionId !== currentCallSessionId) return
+        await stopMedia()
         setIncomingCall(null)
         setCurrentCallSessionId(null)
         setCallUiState("idle")
@@ -203,7 +209,7 @@ export default function ChatScreen() {
       supabase.removeChannel(callChannel)
       callChannelRef.current = null
     }
-  }, [conversationId, currentCallSessionId])
+  }, [conversationId, currentCallSessionId, startMedia, stopMedia])
 
   useIncomingCallChannel({
     userId,
@@ -214,8 +220,9 @@ export default function ChatScreen() {
       setCurrentCallType(call.callType)
       setCallUiState("incoming")
     },
-    onCallEnded: (callSessionId) => {
+    onCallEnded: async (callSessionId) => {
       if (currentCallSessionId && callSessionId !== currentCallSessionId) return
+      await stopMedia()
       setIncomingCall(null)
       setCurrentCallSessionId(null)
       setCallUiState("idle")
@@ -227,6 +234,12 @@ export default function ChatScreen() {
     const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 80)
     return () => clearTimeout(t)
   }, [messages.length])
+
+  useEffect(() => {
+    return () => {
+      stopMedia()
+    }
+  }, [stopMedia])
 
   const otherMember = useMemo(() => members.find((member) => member.member_id !== userId) || null, [members, userId])
   const otherName = otherMember?.name?.trim() || otherMember?.alias?.trim() || otherMember?.email?.trim() || "Membru"
@@ -255,6 +268,7 @@ export default function ChatScreen() {
     try {
       setCallBusy(true)
       setCurrentCallType(callType)
+      await startMedia(callType)
 
       const session = await createOutgoingCallSession({
         conversationId,
@@ -286,6 +300,7 @@ export default function ChatScreen() {
       setCallUiState("outgoing")
     } catch (error) {
       console.error("Start call error", error)
+      await stopMedia()
     } finally {
       setCallBusy(false)
     }
@@ -296,6 +311,7 @@ export default function ChatScreen() {
 
     try {
       setCallBusy(true)
+      await startMedia(incomingCall.callType)
       await supabase
         .from("call_sessions")
         .update({
@@ -329,6 +345,7 @@ export default function ChatScreen() {
       setIncomingCall(null)
     } catch (error) {
       console.error("Accept call error", error)
+      await stopMedia()
     } finally {
       setCallBusy(false)
     }
@@ -363,6 +380,7 @@ export default function ChatScreen() {
     } catch (error) {
       console.error("Reject call error", error)
     } finally {
+      await stopMedia()
       setIncomingCall(null)
       setCurrentCallSessionId(null)
       setCallUiState("idle")
@@ -372,6 +390,7 @@ export default function ChatScreen() {
 
   async function handleEndCall() {
     if (!currentCallSessionId || !userId) {
+      await stopMedia()
       setIncomingCall(null)
       setCallUiState("idle")
       return
@@ -400,6 +419,7 @@ export default function ChatScreen() {
     } catch (error) {
       console.error("End call error", error)
     } finally {
+      await stopMedia()
       setIncomingCall(null)
       setCurrentCallSessionId(null)
       setCallUiState("idle")
@@ -514,6 +534,7 @@ export default function ChatScreen() {
                     ? "Apel video conectat"
                     : "Apel audio conectat"}
             </Text>
+            <Text style={styles.callMediaHint}>{mediaReady ? "Media pregătită pentru următorul pas WebRTC" : "Se pregătește media nativă..."}</Text>
 
             {callUiState === "incoming" ? (
               <View style={styles.callActionsRow}>
@@ -724,6 +745,12 @@ const styles = StyleSheet.create({
     color: theme.colors.textSoft,
     fontSize: 16,
     marginTop: 10,
+    textAlign: "center",
+  },
+  callMediaHint: {
+    color: theme.colors.textDim,
+    fontSize: 13,
+    marginTop: 8,
     textAlign: "center",
   },
   callActionsRow: {
