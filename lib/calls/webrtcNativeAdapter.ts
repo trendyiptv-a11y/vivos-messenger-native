@@ -1,5 +1,6 @@
 import { IceCandidateLike, NativeStreamViewState, SessionDescriptionLike, WebRtcConnectionStateLike } from "@/types/webrtc"
 import { CallType } from "@/types/call"
+import { IceServerConfig } from "@/lib/calls/turn"
 import { getWebRtcRuntimeState } from "@/lib/calls/webrtcRuntime"
 import { WEBRTC_PLACEHOLDERS } from "@/lib/calls/webrtcConfig"
 
@@ -17,9 +18,12 @@ type NativeWebRtcInternals = {
 export type NativeWebRtcSession = NativeStreamViewState & {
   callType: CallType
   diagnostics: string[]
+  iceServers: IceServerConfig[]
 }
 
 let currentNativeSession: NativeWebRtcSession | null = null
+let currentIceServers: IceServerConfig[] = []
+let localIceCandidateHandler: ((candidate: IceCandidateLike) => Promise<void> | void) | null = null
 let internals: NativeWebRtcInternals = {
   moduleRef: null,
   peerConnection: null,
@@ -29,7 +33,7 @@ let internals: NativeWebRtcInternals = {
 
 function pushDiagnostic(message: string) {
   if (!currentNativeSession) return
-  currentNativeSession.diagnostics = [...currentNativeSession.diagnostics.slice(-10), message]
+  currentNativeSession.diagnostics = [...currentNativeSession.diagnostics.slice(-20), message]
 }
 
 function setConnectionState(state: WebRtcConnectionStateLike) {
@@ -55,12 +59,30 @@ function syncStreamURLs() {
   currentNativeSession.remoteReady = Boolean(currentNativeSession.remoteURL)
 }
 
+function normalizeIceCandidate(candidate: any): IceCandidateLike | null {
+  if (!candidate) return null
+
+  const raw = typeof candidate.toJSON === "function" ? candidate.toJSON() : candidate
+  const value = typeof raw?.candidate === "string" ? raw.candidate : ""
+
+  if (!value || value.startsWith("TODO_NATIVE_ICE_CANDIDATE")) {
+    return null
+  }
+
+  return {
+    candidate: value,
+    sdpMid: raw?.sdpMid ?? null,
+    sdpMLineIndex: raw?.sdpMLineIndex ?? null,
+    usernameFragment: raw?.usernameFragment ?? null,
+  }
+}
+
 async function ensurePeerConnection() {
   const moduleRef = getModuleRef()
   if (!moduleRef) return null
   if (internals.peerConnection) return internals.peerConnection
 
-  const pc = new moduleRef.RTCPeerConnection({ iceServers: [] })
+  const pc = new moduleRef.RTCPeerConnection({ iceServers: currentIceServers })
 
   pc.onconnectionstatechange = () => {
     const nextState = (pc.connectionState || "unknown") as WebRtcConnectionStateLike
@@ -68,19 +90,53 @@ async function ensurePeerConnection() {
     pushDiagnostic(`Connection state: ${nextState}`)
   }
 
-  pc.ontrack = (event: { streams?: StreamLike[] }) => {
+  pc.oniceconnectionstatechange = () => {
+    pushDiagnostic(`ICE state: ${pc.iceConnectionState || "unknown"}`)
+  }
+
+  pc.onicegatheringstatechange = () => {
+    pushDiagnostic(`ICE gathering: ${pc.iceGatheringState || "unknown"}`)
+  }
+
+  pc.onicecandidate = async (event: any) => {
+    const normalized = normalizeIceCandidate(event?.candidate)
+    if (!normalized) return
+
+    pushDiagnostic("ICE local generat")
+
+    try {
+      await localIceCandidateHandler?.(normalized)
+    } catch (error) {
+      pushDiagnostic("Trimiterea ICE local a eșuat")
+      console.warn("Local ICE handler failed", error)
+    }
+  }
+
+  pc.ontrack = (event: { streams?: StreamLike[]; track?: any }) => {
     const remote = event.streams?.[0] ?? null
-    internals.remoteStream = remote
-    syncStreamURLs()
-    pushDiagnostic(remote ? "Remote stream atașat" : "Track remote fără stream")
+    if (remote) {
+      internals.remoteStream = remote
+      syncStreamURLs()
+      pushDiagnostic("Remote stream atașat")
+      return
+    }
+
+    pushDiagnostic(event.track ? "Track remote primit" : "Track remote fără stream")
   }
 
   internals.peerConnection = pc
   return pc
 }
 
-export async function createNativeWebRtcSession(callType: CallType) {
+export function setNativeIceCandidateHandler(
+  handler: ((candidate: IceCandidateLike) => Promise<void> | void) | null
+) {
+  localIceCandidateHandler = handler
+}
+
+export async function createNativeWebRtcSession(callType: CallType, iceServers: IceServerConfig[] = []) {
   const runtime = getWebRtcRuntimeState()
+  currentIceServers = iceServers
 
   currentNativeSession = {
     callType,
@@ -90,6 +146,7 @@ export async function createNativeWebRtcSession(callType: CallType) {
     remoteReady: false,
     connectionState: "new",
     diagnostics: [],
+    iceServers,
   }
 
   internals = {
@@ -101,6 +158,7 @@ export async function createNativeWebRtcSession(callType: CallType) {
 
   pushDiagnostic(`Sesiune nativă creată pentru ${callType}`)
   pushDiagnostic(runtime.note)
+  pushDiagnostic(`ICE servers configurate: ${iceServers.length}`)
 
   if (runtime.readyForNativeStreams) {
     await ensurePeerConnection()
@@ -125,9 +183,18 @@ export async function prepareNativeLocalStream() {
     return
   }
 
+  if (internals.localStream) {
+    syncStreamURLs()
+    pushDiagnostic("Local stream reutilizat")
+    return
+  }
+
   const localStream = await moduleRef.mediaDevices.getUserMedia({
     audio: true,
-    video: currentNativeSession.callType === "video",
+    video:
+      currentNativeSession.callType === "video"
+        ? { facingMode: "user" }
+        : false,
   })
 
   internals.localStream = localStream
@@ -154,7 +221,10 @@ export async function createNativeOffer(): Promise<SessionDescriptionLike> {
     }
   }
 
-  const offer = await pc.createOffer()
+  const offer = await pc.createOffer({
+    offerToReceiveAudio: true,
+    offerToReceiveVideo: currentNativeSession?.callType === "video",
+  })
   await pc.setLocalDescription(offer)
   pushDiagnostic("Offer nativ generat")
   return {
@@ -196,6 +266,12 @@ export async function applyNativeRemoteDescription(description: SessionDescripti
 }
 
 export async function addNativeIceCandidate(candidate: IceCandidateLike) {
+  const normalized = normalizeIceCandidate(candidate)
+  if (!normalized) {
+    pushDiagnostic("ICE placeholder ignorat")
+    return
+  }
+
   const moduleRef = getModuleRef()
   const pc = await ensurePeerConnection()
 
@@ -204,7 +280,7 @@ export async function addNativeIceCandidate(candidate: IceCandidateLike) {
     return
   }
 
-  await pc.addIceCandidate(new moduleRef.RTCIceCandidate(candidate))
+  await pc.addIceCandidate(new moduleRef.RTCIceCandidate(normalized))
   pushDiagnostic("ICE candidate aplicat")
 }
 
@@ -218,6 +294,8 @@ export async function closeNativeWebRtcSession() {
   }
 
   currentNativeSession = null
+  currentIceServers = []
+  localIceCandidateHandler = null
   internals = {
     moduleRef: null,
     peerConnection: null,
