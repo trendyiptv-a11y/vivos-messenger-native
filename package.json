@@ -14,6 +14,7 @@
     "dev:ios": "eas build --profile development --platform ios"
   },
   "dependencies": {
+    "@config-plugins/react-native-webrtc": "11.0.0",
     "@expo/vector-icons": "^14.0.2",
     "@react-native-async-storage/async-storage": "2.1.2",
     "@supabase/supabase-js": "^2.49.8",
@@ -29,7 +30,8 @@
     "react": "19.0.0",
     "react-native": "0.79.4",
     "react-native-safe-area-context": "5.4.0",
-    "react-native-screens": "~4.11.1"
+    "react-native-screens": "~4.11.1",
+    "react-native-webrtc": "124.0.5"
   },
   "devDependencies": {
     "@types/react": "~19.0.10",
