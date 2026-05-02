@@ -30,7 +30,7 @@ let currentState: WebRtcManagerState | null = null
 
 function pushDiagnostic(message: string) {
   if (!currentState) return
-  currentState.diagnostics = [...currentState.diagnostics.slice(-6), message]
+  currentState.diagnostics = [...currentState.diagnostics.slice(-8), message]
 }
 
 function syncNativeFlags() {
@@ -38,6 +38,10 @@ function syncNativeFlags() {
   const nativeSession = getNativeWebRtcSession()
   currentState.localStreamReady = Boolean(nativeSession?.localStreamReady)
   currentState.remoteStreamReady = Boolean(nativeSession?.remoteStreamReady)
+
+  const nativeDiagnostics = nativeSession?.diagnostics ?? []
+  const combined = [...currentState.diagnostics, ...nativeDiagnostics]
+  currentState.diagnostics = combined.slice(-8)
 }
 
 export async function createWebRtcManager(callType: CallType) {
