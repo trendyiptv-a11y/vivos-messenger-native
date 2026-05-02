@@ -13,6 +13,7 @@ type ConversationRow = { id: string; created_at: string }
 type MemberRow = { member_id: string; name: string | null; alias: string | null; email: string | null }
 type MemberGroup = { conversation_id: string; members: MemberRow[] }
 type MessageRow = { id?: string; conversation_id: string; body: string; created_at: string }
+type NotificationRefRow = { id: string; ref_id: string | null }
 
 type ConvCard = {
   id: string
@@ -20,6 +21,7 @@ type ConvCard = {
   email: string | null
   preview: string
   date: string
+  unreadCount: number
 }
 
 export default function InboxScreen() {
@@ -30,6 +32,7 @@ export default function InboxScreen() {
   const [conversations, setConversations] = useState<ConversationRow[]>([])
   const [members, setMembers] = useState<MemberGroup[]>([])
   const [messages, setMessages] = useState<MessageRow[]>([])
+  const [unreadByConv, setUnreadByConv] = useState<Record<string, number>>({})
 
   useEffect(() => {
     async function load() {
@@ -71,41 +74,88 @@ export default function InboxScreen() {
         })
       )
 
-      const { data: msgData } = await supabase
-        .from("messages")
-        .select("id, conversation_id, body, created_at")
-        .in("conversation_id", ids)
-        .order("created_at", { ascending: false })
+      const [{ data: msgData }, { data: unreadNotifications }] = await Promise.all([
+        supabase
+          .from("messages")
+          .select("id, conversation_id, body, created_at")
+          .in("conversation_id", ids)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("notifications")
+          .select("id, ref_id")
+          .eq("event_type", "new_message")
+          .eq("is_read", false)
+          .eq("user_id", session.user.id),
+      ])
+
+      const unreadMessageIds = ((unreadNotifications ?? []) as NotificationRefRow[])
+        .map((item) => item.ref_id)
+        .filter((value): value is string => !!value)
+
+      const unreadMap: Record<string, number> = {}
+      if (unreadMessageIds.length) {
+        const { data: unreadMessages } = await supabase
+          .from("messages")
+          .select("id, conversation_id")
+          .in("id", unreadMessageIds)
+
+        ;((unreadMessages ?? []) as any[]).forEach((row) => {
+          const cid = String(row.conversation_id || "")
+          if (!cid) return
+          unreadMap[cid] = (unreadMap[cid] ?? 0) + 1
+        })
+      }
 
       setConversations(convs)
       setMembers(memberGroups)
       setMessages((msgData ?? []) as MessageRow[])
+      setUnreadByConv(unreadMap)
       setLoading(false)
     }
 
     load()
+
+    const channel = supabase
+      .channel("native-inbox-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, load)
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [router])
 
   const cards = useMemo<ConvCard[]>(() => {
-    return conversations.map((conv) => {
-      const group = members.find((g) => g.conversation_id === conv.id)
-      const other = group?.members.find((m) => m.member_id !== userId) ?? null
-      const latest = messages.find((m) => m.conversation_id === conv.id)
-      return {
-        id: conv.id,
-        name: other?.name?.trim() || other?.alias?.trim() || other?.email?.trim() || "Membru",
-        email: other?.email?.trim() || null,
-        preview: latest?.body || "Fără mesaje",
-        date: latest?.created_at || conv.created_at,
-      }
-    })
-  }, [conversations, members, messages, userId])
+    return conversations
+      .map((conv) => {
+        const group = members.find((g) => g.conversation_id === conv.id)
+        const other = group?.members.find((m) => m.member_id !== userId) ?? null
+        const latest = messages.find((m) => m.conversation_id === conv.id)
+        return {
+          id: conv.id,
+          name: other?.name?.trim() || other?.alias?.trim() || other?.email?.trim() || "Membru",
+          email: other?.email?.trim() || null,
+          preview: latest?.body || "Fără mesaje",
+          date: latest?.created_at || conv.created_at,
+          unreadCount: unreadByConv[conv.id] ?? 0,
+        }
+      })
+      .sort((a, b) => {
+        const aUnread = a.unreadCount > 0
+        const bUnread = b.unreadCount > 0
+        if (aUnread !== bUnread) return aUnread ? -1 : 1
+        return new Date(b.date).getTime() - new Date(a.date).getTime()
+      })
+  }, [conversations, members, messages, unreadByConv, userId])
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
     if (!term) return cards
     return cards.filter((card) => [card.name, card.email || "", card.preview].some((v) => v.toLowerCase().includes(term)))
   }, [cards, search])
+
+  const totalUnread = useMemo(() => Object.values(unreadByConv).reduce((sum, value) => sum + value, 0), [unreadByConv])
 
   return (
     <AppShell padded={false}>
@@ -119,8 +169,8 @@ export default function InboxScreen() {
 
           <View style={styles.statsRow}>
             <View style={styles.statCard}><Text style={styles.statLabel}>Conversații</Text><Text style={styles.statValue}>{cards.length}</Text></View>
-            <View style={styles.statCard}><Text style={styles.statLabel}>Rezultate</Text><Text style={styles.statValue}>{filtered.length}</Text></View>
-            <View style={styles.statCard}><Text style={styles.statLabel}>Active</Text><Text style={styles.statValue}>{Math.min(filtered.length, 9)}</Text></View>
+            <View style={styles.statCard}><Text style={styles.statLabel}>Necitite</Text><Text style={styles.statValue}>{totalUnread}</Text></View>
+            <View style={styles.statCard}><Text style={styles.statLabel}>Active</Text><Text style={styles.statValue}>{cards.filter((card) => card.unreadCount > 0).length}</Text></View>
           </View>
         </View>
 
@@ -135,16 +185,21 @@ export default function InboxScreen() {
           <Text style={styles.helper}>Nicio conversație încă.</Text>
         ) : (
           filtered.map((card) => (
-            <Pressable key={card.id} onPress={() => router.push(`/chat/${card.id}`)} style={styles.convCard}>
+            <Pressable key={card.id} onPress={() => router.push(`/chat/${card.id}`)} style={[styles.convCard, card.unreadCount > 0 && styles.convCardUnread]}>
               <View style={styles.avatarCircle}>
                 <Text style={styles.avatarText}>{gradientTextSeed(card.email || card.name)}</Text>
               </View>
               <View style={styles.convBody}>
                 <View style={styles.convTop}>
-                  <Text numberOfLines={1} style={styles.convName}>{card.name}</Text>
-                  <Text style={styles.convDate}>{new Date(card.date).toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit" })}</Text>
+                  <Text numberOfLines={1} style={[styles.convName, card.unreadCount > 0 && styles.convNameUnread]}>{card.name}</Text>
+                  <View style={styles.convMetaRight}>
+                    <Text style={styles.convDate}>{new Date(card.date).toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit" })}</Text>
+                    {card.unreadCount > 0 ? (
+                      <View style={styles.unreadBadge}><Text style={styles.unreadBadgeText}>{card.unreadCount > 99 ? "99+" : card.unreadCount}</Text></View>
+                    ) : null}
+                  </View>
                 </View>
-                <Text numberOfLines={1} style={styles.convPreview}>{card.preview}</Text>
+                <Text numberOfLines={1} style={[styles.convPreview, card.unreadCount > 0 && styles.convPreviewUnread]}>{card.preview}</Text>
               </View>
             </Pressable>
           ))
@@ -242,6 +297,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
+  convCardUnread: {
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderColor: "rgba(255,255,255,0.18)",
+  },
   avatarCircle: {
     width: 50,
     height: 50,
@@ -264,11 +323,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 8,
   },
+  convMetaRight: {
+    alignItems: "flex-end",
+    gap: 5,
+  },
   convName: {
     flex: 1,
     color: theme.colors.text,
     fontSize: 17,
     fontWeight: "700",
+  },
+  convNameUnread: {
+    fontWeight: "800",
   },
   convDate: {
     color: theme.colors.textDim,
@@ -278,5 +344,23 @@ const styles = StyleSheet.create({
     color: theme.colors.textSoft,
     fontSize: 14,
     marginTop: 4,
+  },
+  convPreviewUnread: {
+    color: theme.colors.text,
+    fontWeight: "600",
+  },
+  unreadBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.accentMid,
+  },
+  unreadBadgeText: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "800",
   },
 })
