@@ -60,8 +60,17 @@ export function CallOverlay({
 
         {showVideoSlots ? (
           <View style={styles.previewWrap}>
-            <VideoPreviewPlaceholder label="Preview remote" ready={Boolean(currentWebRtcState?.remoteStreamReady)} />
-            <VideoPreviewPlaceholder label="Preview local" ready={Boolean(currentWebRtcState?.localStreamReady)} compact />
+            <VideoPreviewPlaceholder
+              label="Preview remote"
+              ready={Boolean(currentWebRtcState?.remoteStreamReady)}
+              streamURL={currentWebRtcState?.remoteStreamURL ?? null}
+            />
+            <VideoPreviewPlaceholder
+              label="Preview local"
+              ready={Boolean(currentWebRtcState?.localStreamReady)}
+              streamURL={currentWebRtcState?.localStreamURL ?? null}
+              compact
+            />
           </View>
         ) : null}
 
