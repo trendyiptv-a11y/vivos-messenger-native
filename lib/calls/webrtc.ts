@@ -1,6 +1,17 @@
 import { IceCandidateLike, SessionDescriptionLike } from "@/types/webrtc"
 import { CallType } from "@/types/call"
 import { IceServerConfig, loadTurnCredentials } from "@/lib/calls/turn"
+import {
+  addNativeIceCandidate,
+  applyNativeRemoteDescription,
+  closeNativeWebRtcSession,
+  createNativeAnswer,
+  createNativeOffer,
+  createNativeWebRtcSession,
+  getNativeWebRtcSession,
+  markNativeRemoteStreamReady,
+  prepareNativeLocalStream,
+} from "@/lib/calls/webrtcNativeAdapter"
 
 export type WebRtcManagerState = {
   callType: CallType
@@ -11,17 +22,27 @@ export type WebRtcManagerState = {
   connected: boolean
   iceServers: IceServerConfig[]
   diagnostics: string[]
+  localStreamReady: boolean
+  remoteStreamReady: boolean
 }
 
 let currentState: WebRtcManagerState | null = null
 
 function pushDiagnostic(message: string) {
   if (!currentState) return
-  currentState.diagnostics = [...currentState.diagnostics.slice(-5), message]
+  currentState.diagnostics = [...currentState.diagnostics.slice(-6), message]
+}
+
+function syncNativeFlags() {
+  if (!currentState) return
+  const nativeSession = getNativeWebRtcSession()
+  currentState.localStreamReady = Boolean(nativeSession?.localStreamReady)
+  currentState.remoteStreamReady = Boolean(nativeSession?.remoteStreamReady)
 }
 
 export async function createWebRtcManager(callType: CallType) {
   const { iceServers } = await loadTurnCredentials().catch(() => ({ iceServers: [] as IceServerConfig[] }))
+  await createNativeWebRtcSession(callType)
 
   currentState = {
     callType,
@@ -32,23 +53,30 @@ export async function createWebRtcManager(callType: CallType) {
     connected: false,
     iceServers,
     diagnostics: [],
+    localStreamReady: false,
+    remoteStreamReady: false,
   }
 
   pushDiagnostic(`Manager creat pentru ${callType}`)
   pushDiagnostic(`ICE servers: ${iceServers.length}`)
+  syncNativeFlags()
 
   return currentState
 }
 
 export function getWebRtcManagerState() {
+  syncNativeFlags()
   return currentState
 }
 
+export async function prepareWebRtcLocalStream() {
+  await prepareNativeLocalStream()
+  syncNativeFlags()
+  pushDiagnostic("Local stream pregătit")
+}
+
 export async function createLocalOffer(): Promise<SessionDescriptionLike> {
-  const offer: SessionDescriptionLike = {
-    type: "offer",
-    sdp: "TODO_NATIVE_WEBRTC_OFFER",
-  }
+  const offer = await createNativeOffer()
 
   if (currentState) {
     currentState.localDescription = offer
@@ -59,10 +87,7 @@ export async function createLocalOffer(): Promise<SessionDescriptionLike> {
 }
 
 export async function createLocalAnswer(): Promise<SessionDescriptionLike> {
-  const answer: SessionDescriptionLike = {
-    type: "answer",
-    sdp: "TODO_NATIVE_WEBRTC_ANSWER",
-  }
+  const answer = await createNativeAnswer()
 
   if (currentState) {
     currentState.localDescription = answer
@@ -73,17 +98,23 @@ export async function createLocalAnswer(): Promise<SessionDescriptionLike> {
 }
 
 export async function applyRemoteDescription(description: SessionDescriptionLike) {
+  await applyNativeRemoteDescription(description)
+
   if (currentState) {
     currentState.remoteDescription = description
     pushDiagnostic(`Remote description aplicată: ${description.type}`)
     if (description.type === "answer") {
       currentState.connected = true
+      await markNativeRemoteStreamReady()
+      syncNativeFlags()
       pushDiagnostic("Conexiune marcată ca activă")
     }
   }
 }
 
 export async function addRemoteIceCandidate(candidate: IceCandidateLike) {
+  await addNativeIceCandidate(candidate)
+
   if (currentState) {
     currentState.remoteCandidates.push(candidate)
     pushDiagnostic("ICE remote adăugat")
@@ -100,10 +131,13 @@ export async function addLocalIceCandidate(candidate: IceCandidateLike) {
 export async function markWebRtcConnected() {
   if (currentState) {
     currentState.connected = true
+    await markNativeRemoteStreamReady()
+    syncNativeFlags()
     pushDiagnostic("WebRTC conectat logic")
   }
 }
 
 export async function closeWebRtcManager() {
+  await closeNativeWebRtcSession()
   currentState = null
 }
