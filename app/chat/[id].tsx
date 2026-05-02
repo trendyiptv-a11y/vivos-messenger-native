@@ -8,9 +8,21 @@ import { ScreenHeader, HeaderIconButton } from "@/components/ui/ScreenHeader"
 import { useCallMedia } from "@/hooks/useCallMedia"
 import { useIncomingCallChannel } from "@/hooks/useIncomingCallChannel"
 import { createOutgoingCallSession, endCallSession, logCallEvent } from "@/lib/calls/signaling"
+import {
+  addRemoteIceCandidate,
+  applyRemoteDescription,
+  closeWebRtcManager,
+  createLocalAnswer,
+  createLocalOffer,
+  createWebRtcManager,
+  getWebRtcManagerState,
+  markWebRtcConnected,
+} from "@/lib/calls/webrtc"
+import { buildWebRtcSignalPayload, sendAnswerSignal, sendIceCandidateSignal, sendOfferSignal } from "@/lib/calls/webrtcSignaling"
 import { supabase } from "@/lib/supabase"
 import { theme } from "@/lib/theme"
 import { CallType, CallUiState, IncomingCall } from "@/types/call"
+import { IceCandidateLike, SessionDescriptionLike } from "@/types/webrtc"
 
 type MessageRow = {
   id: string
@@ -65,6 +77,7 @@ export default function ChatScreen() {
   const [callBusy, setCallBusy] = useState(false)
   const [currentCallSessionId, setCurrentCallSessionId] = useState<string | null>(null)
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null)
+  const [webrtcStatus, setWebrtcStatus] = useState<string>("Inactiv")
 
   const { mediaReady, startMedia, stopMedia } = useCallMedia()
 
@@ -180,14 +193,26 @@ export default function ChatScreen() {
     const callChannel = supabase
       .channel(`call:conversation:${conversationId}`)
       .on("broadcast", { event: "call_accept" }, async ({ payload }) => {
-        if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId) return
+        if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !userId) return
         await startMedia(payload.callType === "video" ? "video" : "audio")
+        await createWebRtcManager(payload.callType === "video" ? "video" : "audio")
+        const offer = await createLocalOffer()
+        const signalBase = buildWebRtcSignalPayload({
+          callSessionId: payload.callSessionId,
+          conversationId,
+          fromUserId: userId,
+          callType: payload.callType === "video" ? "video" : "audio",
+        })
+        await sendOfferSignal(callChannelRef.current, { ...signalBase, sdp: offer })
+        setWebrtcStatus("Offer local trimis")
         setIncomingCall(null)
         setCallUiState("connected")
       })
       .on("broadcast", { event: "call_reject" }, async ({ payload }) => {
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId) return
         await stopMedia()
+        await closeWebRtcManager()
+        setWebrtcStatus("Respins")
         setIncomingCall(null)
         setCurrentCallSessionId(null)
         setCallUiState("idle")
@@ -196,9 +221,36 @@ export default function ChatScreen() {
         if (!payload?.callSessionId) return
         if (currentCallSessionId && payload.callSessionId !== currentCallSessionId) return
         await stopMedia()
+        await closeWebRtcManager()
+        setWebrtcStatus("Închis")
         setIncomingCall(null)
         setCurrentCallSessionId(null)
         setCallUiState("idle")
+      })
+      .on("broadcast", { event: "webrtc_offer" }, async ({ payload }) => {
+        if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !payload?.sdp || !userId) return
+        await createWebRtcManager(payload.callType === "video" ? "video" : "audio")
+        await applyRemoteDescription(payload.sdp as SessionDescriptionLike)
+        const answer = await createLocalAnswer()
+        const signalBase = buildWebRtcSignalPayload({
+          callSessionId: payload.callSessionId,
+          conversationId,
+          fromUserId: userId,
+          callType: payload.callType === "video" ? "video" : "audio",
+        })
+        await sendAnswerSignal(callChannelRef.current, { ...signalBase, sdp: answer })
+        setWebrtcStatus("Offer primit, answer trimis")
+      })
+      .on("broadcast", { event: "webrtc_answer" }, async ({ payload }) => {
+        if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !payload?.sdp) return
+        await applyRemoteDescription(payload.sdp as SessionDescriptionLike)
+        await markWebRtcConnected()
+        setWebrtcStatus("Answer primit")
+      })
+      .on("broadcast", { event: "ice_candidate" }, async ({ payload }) => {
+        if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !payload?.candidate) return
+        await addRemoteIceCandidate(payload.candidate as IceCandidateLike)
+        setWebrtcStatus("ICE primit")
       })
       .subscribe()
 
@@ -209,7 +261,7 @@ export default function ChatScreen() {
       supabase.removeChannel(callChannel)
       callChannelRef.current = null
     }
-  }, [conversationId, currentCallSessionId, startMedia, stopMedia])
+  }, [conversationId, currentCallSessionId, startMedia, stopMedia, userId])
 
   useIncomingCallChannel({
     userId,
@@ -218,11 +270,14 @@ export default function ChatScreen() {
       setIncomingCall(call)
       setCurrentCallSessionId(call.callSessionId)
       setCurrentCallType(call.callType)
+      setWebrtcStatus("În așteptare")
       setCallUiState("incoming")
     },
     onCallEnded: async (callSessionId) => {
       if (currentCallSessionId && callSessionId !== currentCallSessionId) return
       await stopMedia()
+      await closeWebRtcManager()
+      setWebrtcStatus("Închis")
       setIncomingCall(null)
       setCurrentCallSessionId(null)
       setCallUiState("idle")
@@ -238,6 +293,7 @@ export default function ChatScreen() {
   useEffect(() => {
     return () => {
       stopMedia()
+      closeWebRtcManager()
     }
   }, [stopMedia])
 
@@ -269,6 +325,8 @@ export default function ChatScreen() {
       setCallBusy(true)
       setCurrentCallType(callType)
       await startMedia(callType)
+      await createWebRtcManager(callType)
+      setWebrtcStatus("Media pregătită")
 
       const session = await createOutgoingCallSession({
         conversationId,
@@ -296,11 +354,23 @@ export default function ChatScreen() {
         },
       })
 
+      const signalBase = buildWebRtcSignalPayload({
+        callSessionId: session.id,
+        conversationId,
+        fromUserId: userId,
+        callType,
+      })
+      await sendIceCandidateSignal(callChannelRef.current, {
+        ...signalBase,
+        candidate: { candidate: "TODO_NATIVE_ICE_CANDIDATE", sdpMid: "0", sdpMLineIndex: 0 },
+      })
+
       setCurrentCallSessionId(session.id)
       setCallUiState("outgoing")
     } catch (error) {
       console.error("Start call error", error)
       await stopMedia()
+      await closeWebRtcManager()
     } finally {
       setCallBusy(false)
     }
@@ -312,6 +382,7 @@ export default function ChatScreen() {
     try {
       setCallBusy(true)
       await startMedia(incomingCall.callType)
+      await createWebRtcManager(incomingCall.callType)
       await supabase
         .from("call_sessions")
         .update({
@@ -339,6 +410,7 @@ export default function ChatScreen() {
         },
       })
 
+      setWebrtcStatus("Acceptat, aștept offer")
       setCurrentCallSessionId(incomingCall.callSessionId)
       setCurrentCallType(incomingCall.callType)
       setCallUiState("connected")
@@ -346,6 +418,7 @@ export default function ChatScreen() {
     } catch (error) {
       console.error("Accept call error", error)
       await stopMedia()
+      await closeWebRtcManager()
     } finally {
       setCallBusy(false)
     }
@@ -381,6 +454,8 @@ export default function ChatScreen() {
       console.error("Reject call error", error)
     } finally {
       await stopMedia()
+      await closeWebRtcManager()
+      setWebrtcStatus("Respins")
       setIncomingCall(null)
       setCurrentCallSessionId(null)
       setCallUiState("idle")
@@ -391,6 +466,7 @@ export default function ChatScreen() {
   async function handleEndCall() {
     if (!currentCallSessionId || !userId) {
       await stopMedia()
+      await closeWebRtcManager()
       setIncomingCall(null)
       setCallUiState("idle")
       return
@@ -420,6 +496,8 @@ export default function ChatScreen() {
       console.error("End call error", error)
     } finally {
       await stopMedia()
+      await closeWebRtcManager()
+      setWebrtcStatus("Închis")
       setIncomingCall(null)
       setCurrentCallSessionId(null)
       setCallUiState("idle")
@@ -431,6 +509,8 @@ export default function ChatScreen() {
     await supabase.auth.signOut()
     router.replace("/login")
   }
+
+  const currentWebRtcState = getWebRtcManagerState()
 
   return (
     <AppShell padded={false}>
@@ -535,6 +615,10 @@ export default function ChatScreen() {
                     : "Apel audio conectat"}
             </Text>
             <Text style={styles.callMediaHint}>{mediaReady ? "Media pregătită pentru următorul pas WebRTC" : "Se pregătește media nativă..."}</Text>
+            <Text style={styles.callMediaHint}>WebRTC: {webrtcStatus}</Text>
+            <Text style={styles.callMediaHint}>Descriere locală: {currentWebRtcState?.localDescription?.type ?? "—"}</Text>
+            <Text style={styles.callMediaHint}>Descriere remote: {currentWebRtcState?.remoteDescription?.type ?? "—"}</Text>
+            <Text style={styles.callMediaHint}>ICE remote: {currentWebRtcState?.remoteCandidates.length ?? 0}</Text>
 
             {callUiState === "incoming" ? (
               <View style={styles.callActionsRow}>
