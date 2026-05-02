@@ -14,13 +14,22 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "VIVOS Messenger folosește camera pentru apeluri video.",
+        "NSMicrophoneUsageDescription": "VIVOS Messenger folosește microfonul pentru apeluri audio și video."
+      }
     },
     "android": {
       "package": "app.vivos.messenger",
       "adaptiveIcon": {
         "backgroundColor": "#163865"
-      }
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -29,6 +38,13 @@
         "expo-dev-client",
         {
           "launchMode": "most-recent"
+        }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "Permite VIVOS Messenger să folosească camera pentru apeluri video.",
+          "microphonePermission": "Permite VIVOS Messenger să folosească microfonul pentru apeluri audio și video."
         }
       ]
     ],
