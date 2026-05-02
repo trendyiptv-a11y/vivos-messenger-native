@@ -9,8 +9,14 @@ import {
   createWebRtcManager,
   markWebRtcConnected,
   prepareWebRtcLocalStream,
+  setLocalIceCandidateHandler,
 } from "@/lib/calls/webrtc"
-import { buildWebRtcSignalPayload, sendAnswerSignal, sendOfferSignal } from "@/lib/calls/webrtcSignaling"
+import {
+  buildWebRtcSignalPayload,
+  sendAnswerSignal,
+  sendIceCandidateSignal,
+  sendOfferSignal,
+} from "@/lib/calls/webrtcSignaling"
 import { CallType } from "@/types/call"
 import { IceCandidateLike, SessionDescriptionLike } from "@/types/webrtc"
 
@@ -48,6 +54,34 @@ export function useChatCallSignaling({
   setWebrtcStatus,
   resetCallFlow,
 }: Args) {
+  useEffect(() => {
+    if (!conversationId || !userId) {
+      setLocalIceCandidateHandler(null)
+      return
+    }
+
+    setLocalIceCandidateHandler(async (candidate) => {
+      if (!currentCallSessionId) return
+
+      const signalBase = buildWebRtcSignalPayload({
+        callSessionId: currentCallSessionId,
+        conversationId,
+        fromUserId: userId,
+        callType: "audio",
+      })
+
+      await sendIceCandidateSignal(callChannelRef.current, {
+        ...signalBase,
+        candidate,
+      })
+      setWebrtcStatus("ICE local trimis")
+    })
+
+    return () => {
+      setLocalIceCandidateHandler(null)
+    }
+  }, [callChannelRef, conversationId, currentCallSessionId, setWebrtcStatus, userId])
+
   useEffect(() => {
     if (!conversationId) return
 
