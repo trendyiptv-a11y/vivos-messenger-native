@@ -1,12 +1,12 @@
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { router, usePathname } from "expo-router"
-import { MessageCircle, Phone, UserRound } from "lucide-react-native"
+import { Ionicons } from "@expo/vector-icons"
 import { theme } from "@/lib/theme"
 
 const items = [
-  { key: "inbox", label: "Mesaje", href: "/inbox", icon: MessageCircle },
-  { key: "calls", label: "Apeluri", href: "/calls", icon: Phone },
-  { key: "profile", label: "Profil", href: "/profile", icon: UserRound },
+  { key: "inbox", label: "Mesaje", href: "/inbox", icon: "chatbubble-outline" as const, iconActive: "chatbubble" as const },
+  { key: "calls", label: "Apeluri", href: "/calls", icon: "call-outline" as const, iconActive: "call" as const },
+  { key: "profile", label: "Profil", href: "/profile", icon: "person-outline" as const, iconActive: "person" as const },
 ]
 
 export function BottomTabBar() {
@@ -15,12 +15,11 @@ export function BottomTabBar() {
   return (
     <View style={styles.wrap}>
       {items.map((item) => {
-        const Icon = item.icon
         const active = pathname === item.href
         return (
           <Pressable key={item.key} onPress={() => router.push(item.href as never)} style={styles.item}>
             <View style={[styles.iconCircle, active && styles.iconCircleActive]}>
-              <Icon color={active ? "white" : theme.colors.textSoft} size={20} />
+              <Ionicons name={active ? item.iconActive : item.icon} color={active ? "white" : theme.colors.textSoft} size={20} />
             </View>
             <Text style={[styles.label, active && styles.labelActive]}>{item.label}</Text>
           </Pressable>
