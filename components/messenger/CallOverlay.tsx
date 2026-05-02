@@ -3,6 +3,8 @@ import { Ionicons } from "@expo/vector-icons"
 import { theme } from "@/lib/theme"
 import { CallUiState, CallType } from "@/types/call"
 import { WebRtcManagerState } from "@/lib/calls/webrtc"
+import { CallDiagnosticsCard } from "@/components/messenger/CallDiagnosticsCard"
+import { VideoPreviewPlaceholder } from "@/components/messenger/VideoPreviewPlaceholder"
 
 type Props = {
   visible: boolean
@@ -33,6 +35,8 @@ export function CallOverlay({
 }: Props) {
   if (!visible) return null
 
+  const showVideoSlots = currentCallType === "video"
+
   return (
     <View style={styles.callOverlay}>
       <View style={styles.callCard}>
@@ -53,22 +57,15 @@ export function CallOverlay({
                 ? "Apel video conectat"
                 : "Apel audio conectat"}
         </Text>
-        <Text style={styles.callMediaHint}>{mediaReady ? "Media pregătită pentru următorul pas WebRTC" : "Se pregătește media nativă..."}</Text>
-        <Text style={styles.callMediaHint}>WebRTC: {webrtcStatus}</Text>
-        <Text style={styles.callMediaHint}>Descriere locală: {currentWebRtcState?.localDescription?.type ?? "—"}</Text>
-        <Text style={styles.callMediaHint}>Descriere remote: {currentWebRtcState?.remoteDescription?.type ?? "—"}</Text>
-        <Text style={styles.callMediaHint}>ICE remote: {currentWebRtcState?.remoteCandidates.length ?? 0}</Text>
-        <Text style={styles.callMediaHint}>ICE local: {currentWebRtcState?.localCandidates.length ?? 0}</Text>
-        <Text style={styles.callMediaHint}>TURN servers: {currentWebRtcState?.iceServers.length ?? 0}</Text>
-        <Text style={styles.callMediaHint}>Local stream: {currentWebRtcState?.localStreamReady ? "da" : "nu"}</Text>
-        <Text style={styles.callMediaHint}>Remote stream: {currentWebRtcState?.remoteStreamReady ? "da" : "nu"}</Text>
-        {currentWebRtcState?.diagnostics?.length ? (
-          <View style={styles.diagList}>
-            {currentWebRtcState.diagnostics.map((item, index) => (
-              <Text key={`${item}-${index}`} style={styles.diagItem}>• {item}</Text>
-            ))}
+
+        {showVideoSlots ? (
+          <View style={styles.previewWrap}>
+            <VideoPreviewPlaceholder label="Preview remote" ready={Boolean(currentWebRtcState?.remoteStreamReady)} />
+            <VideoPreviewPlaceholder label="Preview local" ready={Boolean(currentWebRtcState?.localStreamReady)} compact />
           </View>
         ) : null}
+
+        <CallDiagnosticsCard webrtcStatus={webrtcStatus} mediaReady={mediaReady} state={currentWebRtcState} />
 
         {callUiState === "incoming" ? (
           <View style={styles.callActionsRow}>
@@ -134,25 +131,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textAlign: "center",
   },
-  callMediaHint: {
-    color: theme.colors.textDim,
-    fontSize: 13,
-    marginTop: 8,
-    textAlign: "center",
-  },
-  diagList: {
-    marginTop: 10,
-    alignSelf: "stretch",
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    padding: 12,
-    gap: 4,
-  },
-  diagItem: {
-    color: theme.colors.textSoft,
-    fontSize: 12,
+  previewWrap: {
+    width: "100%",
+    marginTop: 12,
   },
   callActionsRow: {
     flexDirection: "row",
