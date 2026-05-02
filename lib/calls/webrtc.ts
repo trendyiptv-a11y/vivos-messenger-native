@@ -1,4 +1,4 @@
-import { IceCandidateLike, SessionDescriptionLike } from "@/types/webrtc"
+import { IceCandidateLike, SessionDescriptionLike, WebRtcConnectionStateLike } from "@/types/webrtc"
 import { CallType } from "@/types/call"
 import { IceServerConfig, loadTurnCredentials } from "@/lib/calls/turn"
 import {
@@ -24,24 +24,30 @@ export type WebRtcManagerState = {
   diagnostics: string[]
   localStreamReady: boolean
   remoteStreamReady: boolean
+  localStreamURL: string | null
+  remoteStreamURL: string | null
+  connectionState: WebRtcConnectionStateLike
 }
 
 let currentState: WebRtcManagerState | null = null
 
 function pushDiagnostic(message: string) {
   if (!currentState) return
-  currentState.diagnostics = [...currentState.diagnostics.slice(-8), message]
+  currentState.diagnostics = [...currentState.diagnostics.slice(-10), message]
 }
 
 function syncNativeFlags() {
   if (!currentState) return
   const nativeSession = getNativeWebRtcSession()
-  currentState.localStreamReady = Boolean(nativeSession?.localStreamReady)
-  currentState.remoteStreamReady = Boolean(nativeSession?.remoteStreamReady)
+  currentState.localStreamReady = Boolean(nativeSession?.localReady)
+  currentState.remoteStreamReady = Boolean(nativeSession?.remoteReady)
+  currentState.localStreamURL = nativeSession?.localURL ?? null
+  currentState.remoteStreamURL = nativeSession?.remoteURL ?? null
+  currentState.connectionState = nativeSession?.connectionState ?? "unknown"
 
   const nativeDiagnostics = nativeSession?.diagnostics ?? []
   const combined = [...currentState.diagnostics, ...nativeDiagnostics]
-  currentState.diagnostics = combined.slice(-8)
+  currentState.diagnostics = combined.slice(-10)
 }
 
 export async function createWebRtcManager(callType: CallType) {
@@ -59,6 +65,9 @@ export async function createWebRtcManager(callType: CallType) {
     diagnostics: [],
     localStreamReady: false,
     remoteStreamReady: false,
+    localStreamURL: null,
+    remoteStreamURL: null,
+    connectionState: "new",
   }
 
   pushDiagnostic(`Manager creat pentru ${callType}`)
