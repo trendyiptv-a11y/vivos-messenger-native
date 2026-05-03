@@ -50,9 +50,34 @@ jobs:
       - name: Generate temporary Expo image assets
         run: |
           mkdir -p assets/images
-          printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtAAAACXBIWXMAAAsTAAALEwEAmpwYAAAFYklEQVR4nO3VMQ0AAAgDsOHfNBvwjAwpSGr2ZgAA+I1zAAAA4GQAAICZAQAAZgYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAJgZAAAAZwYAAP4aA6qYAAGvq+mcAAAAAElFTkSuQmCC' | base64 -d > assets/images/icon.png
-          cp assets/images/icon.png assets/images/adaptive-icon.png
-          cp assets/images/icon.png assets/images/splash-icon.png
+          python3 - <<'PY'
+          import struct, zlib
+          from pathlib import Path
+
+          def png(path, size, color):
+              width = height = size
+              r, g, b, a = color
+              raw = b''.join(b'\x00' + bytes([r, g, b, a]) * width for _ in range(height))
+
+              def chunk(kind, data):
+                  return (
+                      struct.pack('>I', len(data))
+                      + kind
+                      + data
+                      + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff)
+                  )
+
+              data = b'\x89PNG\r\n\x1a\n'
+              data += chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 6, 0, 0, 0))
+              data += chunk(b'IDAT', zlib.compress(raw, 9))
+              data += chunk(b'IEND', b'')
+              Path(path).write_bytes(data)
+
+          png('assets/images/icon.png', 1024, (22, 56, 101, 255))
+          png('assets/images/adaptive-icon.png', 1024, (22, 56, 101, 255))
+          png('assets/images/splash-icon.png', 1024, (22, 56, 101, 255))
+          PY
+          file assets/images/icon.png
 
       - name: Link or create EAS project
         run: eas project:init --non-interactive --force
