@@ -9,51 +9,68 @@ type Props = {
 }
 
 export function CallDiagnosticsCard({ webrtcStatus, mediaReady, state }: Props) {
+  const localReady = state?.localStreamReady ? "da" : "nu"
+  const remoteReady = state?.remoteStreamReady ? "da" : "nu"
+  const turnCount = state?.iceServers.length ?? 0
+
   return (
     <View style={styles.wrap}>
-      <Text style={styles.line}>{mediaReady ? "Media pregătită pentru următorul pas WebRTC" : "Se pregătește media nativă..."}</Text>
-      <Text style={styles.line}>WebRTC: {webrtcStatus}</Text>
-      <Text style={styles.line}>Descriere locală: {state?.localDescription?.type ?? "—"}</Text>
-      <Text style={styles.line}>Descriere remote: {state?.remoteDescription?.type ?? "—"}</Text>
-      <Text style={styles.line}>ICE remote: {state?.remoteCandidates.length ?? 0}</Text>
-      <Text style={styles.line}>ICE local: {state?.localCandidates.length ?? 0}</Text>
-      <Text style={styles.line}>TURN servers: {state?.iceServers.length ?? 0}</Text>
-      <Text style={styles.line}>Local stream: {state?.localStreamReady ? "da" : "nu"}</Text>
-      <Text style={styles.line}>Remote stream: {state?.remoteStreamReady ? "da" : "nu"}</Text>
-      {state?.diagnostics?.length ? (
-        <View style={styles.diagList}>
-          {state.diagnostics.map((item, index) => (
-            <Text key={`${item}-${index}`} style={styles.diagItem}>• {item}</Text>
-          ))}
-        </View>
-      ) : null}
+      <Text style={styles.title}>Stare apel</Text>
+      <Text style={styles.status}>{mediaReady ? "Microfon/cameră pregătite" : "Se pregătește media..."}</Text>
+      <View style={styles.grid}>
+        <View style={styles.pill}><Text style={styles.pillLabel}>WebRTC</Text><Text style={styles.pillValue}>{webrtcStatus}</Text></View>
+        <View style={styles.pill}><Text style={styles.pillLabel}>Local</Text><Text style={styles.pillValue}>{localReady}</Text></View>
+        <View style={styles.pill}><Text style={styles.pillLabel}>Remote</Text><Text style={styles.pillValue}>{remoteReady}</Text></View>
+        <View style={styles.pill}><Text style={styles.pillLabel}>TURN</Text><Text style={styles.pillValue}>{turnCount}</Text></View>
+      </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    marginTop: 10,
+    marginTop: 16,
     alignSelf: "stretch",
-  },
-  line: {
-    color: theme.colors.textDim,
-    fontSize: 13,
-    marginTop: 8,
-    textAlign: "center",
-  },
-  diagList: {
-    marginTop: 10,
-    alignSelf: "stretch",
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
     borderColor: theme.colors.border,
-    padding: 12,
-    gap: 4,
+    padding: 14,
   },
-  diagItem: {
+  title: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  status: {
     color: theme.colors.textSoft,
-    fontSize: 12,
+    fontSize: 13,
+    marginTop: 6,
+    textAlign: "center",
+  },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12,
+  },
+  pill: {
+    width: "48%",
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    padding: 10,
+  },
+  pillLabel: {
+    color: theme.colors.textDim,
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  pillValue: {
+    color: theme.colors.text,
+    fontSize: 13,
+    fontWeight: "800",
+    marginTop: 4,
   },
 })
