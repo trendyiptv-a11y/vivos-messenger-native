@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import { KeyboardAvoidingView, Platform, StyleSheet } from "react-native"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
@@ -94,12 +94,6 @@ export default function ChatScreenIntegrated() {
     },
   })
 
-  useEffect(() => {
-    return () => {
-      resetCallFlow("Închis")
-    }
-  }, [resetCallFlow])
-
   async function handleStartCall(callType: CallType) {
     const session = await startOutgoingCall(callType)
     if (!session || !userId) return
@@ -117,6 +111,11 @@ export default function ChatScreenIntegrated() {
     })
   }
 
+  function handleBackToInbox() {
+    setMenuOpen(false)
+    router.replace("/inbox")
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut()
     router.replace("/login")
@@ -129,7 +128,7 @@ export default function ChatScreenIntegrated() {
       <ScreenHeader
         title={otherName}
         left={
-          <HeaderIconButton onPress={() => router.push("/inbox")}>
+          <HeaderIconButton onPress={handleBackToInbox}>
             <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
           </HeaderIconButton>
         }
