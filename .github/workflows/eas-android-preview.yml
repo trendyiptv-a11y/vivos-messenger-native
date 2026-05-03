@@ -48,7 +48,7 @@ jobs:
         run: npm install
 
       - name: Link or create EAS project
-        run: eas project:init --non-interactive
+        run: eas project:init --non-interactive --force
 
       - name: Build Android APK with EAS
         run: eas build --platform android --profile preview --non-interactive
