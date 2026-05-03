@@ -18,7 +18,7 @@ export function NativeVideoSurface({ streamURL, label, compact = false }: Props)
 
   if (!RTCView || !streamURL) {
     return (
-      <View style={[styles.fallback, compact && styles.compact]}>
+      <View style={[styles.fallback, compact && styles.compactSurface]}>
         <Text style={styles.label}>{label}</Text>
         <Text style={styles.state}>{streamURL ? "RTCView indisponibil în build" : "Stream indisponibil"}</Text>
       </View>
@@ -26,8 +26,14 @@ export function NativeVideoSurface({ streamURL, label, compact = false }: Props)
   }
 
   return (
-    <View style={[styles.wrap, compact && styles.compact]}>
-      <RTCView streamURL={streamURL} style={styles.video} objectFit="cover" mirror={label.toLowerCase().includes("local")} />
+    <View style={[styles.wrap, compact && styles.compactSurface]}>
+      <RTCView
+        streamURL={streamURL}
+        style={StyleSheet.absoluteFillObject}
+        objectFit="cover"
+        mirror={label.toLowerCase().includes("local")}
+        zOrder={compact ? 1 : 0}
+      />
       <View style={styles.badge}>
         <Text style={styles.badgeText}>{label}</Text>
       </View>
@@ -38,26 +44,21 @@ export function NativeVideoSurface({ streamURL, label, compact = false }: Props)
 const styles = StyleSheet.create({
   wrap: {
     width: "100%",
-    minHeight: 120,
+    height: 260,
     overflow: "hidden",
-    borderRadius: 20,
+    borderRadius: 22,
     marginTop: 12,
     backgroundColor: "black",
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
-  compact: {
-    minHeight: 88,
-  },
-  video: {
-    width: "100%",
-    height: "100%",
-    minHeight: 120,
+  compactSurface: {
+    height: 118,
   },
   fallback: {
     width: "100%",
-    minHeight: 120,
-    borderRadius: 20,
+    height: 260,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -75,6 +76,7 @@ const styles = StyleSheet.create({
     color: theme.colors.textSoft,
     fontSize: 13,
     marginTop: 6,
+    textAlign: "center",
   },
   badge: {
     position: "absolute",
