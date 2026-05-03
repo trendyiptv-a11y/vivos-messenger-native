@@ -12,8 +12,9 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput({ label, 
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
         ref={ref}
-        placeholderTextColor={theme.colors.textDim}
+        placeholderTextColor="#64748B"
         style={[styles.input, style]}
+        autoCorrect={false}
         {...props}
       />
     </View>
@@ -25,18 +26,19 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    color: theme.colors.text,
+    color: theme.colors.darkText,
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   input: {
-    minHeight: 54,
+    minHeight: 56,
     borderRadius: 18,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.inputBg,
-    color: theme.colors.text,
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+    color: theme.colors.darkText,
     paddingHorizontal: 16,
     fontSize: 16,
+    fontWeight: "600",
   },
 })
