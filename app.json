@@ -1,5 +1,6 @@
 {
   "expo": {
+    "owner": "speednet19",
     "name": "VIVOS Messenger",
     "slug": "vivos-messenger-native",
     "scheme": "vivosmessenger",
