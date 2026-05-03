@@ -84,72 +84,105 @@ export function useChatCallSignaling({
 
   useEffect(() => {
     if (!conversationId) return
+    let active = true
 
     const callChannel = supabase
       .channel(`call:conversation:${conversationId}`)
       .on("broadcast", { event: "call_accept" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
+        if (!active) return
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !userId) return
         const acceptedType: CallType = payload.callType === "video" ? "video" : "audio"
-        await startMedia(acceptedType)
-        await createWebRtcManager(acceptedType)
-        await prepareWebRtcLocalStream()
-        const offer = await createLocalOffer()
-        const signalBase = buildWebRtcSignalPayload({
-          callSessionId: payload.callSessionId,
-          conversationId,
-          fromUserId: userId,
-          callType: acceptedType,
-        })
-        await sendOfferSignal(callChannelRef.current, { ...signalBase, sdp: offer })
-        setCurrentCallType(acceptedType)
-        setWebrtcStatus("Offer local trimis")
-        setIncomingCall(null)
-        setCallUiState("connected")
+        try {
+          await startMedia(acceptedType)
+          await createWebRtcManager(acceptedType)
+          await prepareWebRtcLocalStream()
+          const offer = await createLocalOffer()
+          if (!active) return
+          const signalBase = buildWebRtcSignalPayload({
+            callSessionId: payload.callSessionId,
+            conversationId,
+            fromUserId: userId,
+            callType: acceptedType,
+          })
+          await sendOfferSignal(callChannelRef.current, { ...signalBase, sdp: offer })
+          if (!active) return
+          setCurrentCallType(acceptedType)
+          setWebrtcStatus("Offer local trimis")
+          setIncomingCall(null)
+          setCallUiState("connected")
+        } catch (error) {
+          console.warn("call_accept handling failed", error)
+          if (active) await resetCallFlow("Eroare WebRTC")
+        }
       })
       .on("broadcast", { event: "call_reject" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
+        if (!active) return
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId) return
         await resetCallFlow("Respins")
       })
       .on("broadcast", { event: "call_end" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
+        if (!active) return
         if (!payload?.callSessionId) return
         if (currentCallSessionId && payload.callSessionId !== currentCallSessionId) return
         await resetCallFlow("Închis")
       })
       .on("broadcast", { event: "webrtc_offer" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
+        if (!active) return
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !payload?.sdp || !userId) return
         const offerType: CallType = payload.callType === "video" ? "video" : "audio"
-        await createWebRtcManager(offerType)
-        await prepareWebRtcLocalStream()
-        await applyRemoteDescription(payload.sdp)
-        const answer = await createLocalAnswer()
-        const signalBase = buildWebRtcSignalPayload({
-          callSessionId: payload.callSessionId,
-          conversationId,
-          fromUserId: userId,
-          callType: offerType,
-        })
-        await sendAnswerSignal(callChannelRef.current, { ...signalBase, sdp: answer })
-        setCurrentCallType(offerType)
-        setWebrtcStatus("Offer primit, answer trimis")
+        try {
+          await createWebRtcManager(offerType)
+          await prepareWebRtcLocalStream()
+          await applyRemoteDescription(payload.sdp)
+          const answer = await createLocalAnswer()
+          if (!active) return
+          const signalBase = buildWebRtcSignalPayload({
+            callSessionId: payload.callSessionId,
+            conversationId,
+            fromUserId: userId,
+            callType: offerType,
+          })
+          await sendAnswerSignal(callChannelRef.current, { ...signalBase, sdp: answer })
+          if (!active) return
+          setCurrentCallType(offerType)
+          setWebrtcStatus("Offer primit, answer trimis")
+        } catch (error) {
+          console.warn("webrtc_offer handling failed", error)
+          if (active) await resetCallFlow("Eroare WebRTC")
+        }
       })
       .on("broadcast", { event: "webrtc_answer" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
+        if (!active) return
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !payload?.sdp) return
-        await applyRemoteDescription(payload.sdp)
-        await markWebRtcConnected()
-        setWebrtcStatus("Answer primit")
+        try {
+          await applyRemoteDescription(payload.sdp)
+          await markWebRtcConnected()
+          if (active) setWebrtcStatus("Answer primit")
+        } catch (error) {
+          console.warn("webrtc_answer handling failed", error)
+          if (active) await resetCallFlow("Eroare WebRTC")
+        }
       })
       .on("broadcast", { event: "ice_candidate" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
+        if (!active) return
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !payload?.candidate) return
-        await addRemoteIceCandidate(payload.candidate)
-        setWebrtcStatus("ICE primit")
+        try {
+          await addRemoteIceCandidate(payload.candidate)
+          if (active) setWebrtcStatus("ICE primit")
+        } catch (error) {
+          console.warn("ice_candidate handling failed", error)
+        }
       })
       .subscribe()
 
     callChannelRef.current = callChannel
 
     return () => {
+      active = false
       callChannelRef.current = null
-      supabase.removeChannel(callChannel)
+      supabase.removeChannel(callChannel).catch((error) => {
+        console.warn("call channel cleanup failed", error)
+      })
     }
   }, [conversationId, currentCallSessionId, resetCallFlow, setCallUiState, setCurrentCallType, setIncomingCall, setWebrtcStatus, startMedia, userId, callChannelRef])
 }
