@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { ScrollView } from "react-native"
 import { useRouter } from "expo-router"
 import { supabase } from "@/lib/supabase"
+import { sendMessagePush } from "@/lib/push"
 
 type MessageRow = {
   id: string
@@ -193,14 +194,16 @@ export function useChatConversation(conversationId: string) {
 
   useEffect(() => {
     if (!messages.length) return
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       if (mountedRef.current) scrollRef.current?.scrollToEnd({ animated: false })
     }, 80)
-    return () => clearTimeout(t)
+    return () => clearTimeout(timer)
   }, [messages.length])
 
   const otherMember = useMemo(() => members.find((member) => member.member_id !== userId) || null, [members, userId])
+  const selfMember = useMemo(() => members.find((member) => member.member_id === userId) || null, [members, userId])
   const otherName = otherMember?.name?.trim() || otherMember?.alias?.trim() || otherMember?.email?.trim() || "Membru"
+  const selfName = selfMember?.name?.trim() || selfMember?.alias?.trim() || selfMember?.email?.trim() || "VIVOS"
 
   async function handleSend() {
     if (!body.trim() || !userId || sending) return
@@ -208,14 +211,28 @@ export function useChatConversation(conversationId: string) {
 
     try {
       const text = body.trim()
-      const { error } = await supabase.from("messages").insert({
-        conversation_id: conversationId,
-        sender_id: userId,
-        body: text,
-      })
+      const { data, error } = await supabase
+        .from("messages")
+        .insert({
+          conversation_id: conversationId,
+          sender_id: userId,
+          body: text,
+        })
+        .select("id")
+        .single()
 
       if (!error && mountedRef.current) {
         setBody("")
+      }
+
+      if (!error && otherMember?.member_id) {
+        sendMessagePush({
+          targetUserId: otherMember.member_id,
+          conversationId,
+          senderName: selfName,
+          message: text,
+          messageId: data?.id,
+        })
       }
     } finally {
       if (mountedRef.current) setSending(false)
