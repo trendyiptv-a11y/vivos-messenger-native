@@ -5,9 +5,10 @@ type Props = {
   streamURL: string | null
   label: string
   compact?: boolean
+  fill?: boolean
 }
 
-export function NativeVideoSurface({ streamURL, label, compact = false }: Props) {
+export function NativeVideoSurface({ streamURL, label, compact = false, fill = false }: Props) {
   let RTCView: any = null
 
   try {
@@ -18,7 +19,7 @@ export function NativeVideoSurface({ streamURL, label, compact = false }: Props)
 
   if (!RTCView || !streamURL) {
     return (
-      <View style={[styles.fallback, compact && styles.compactSurface]}>
+      <View style={[styles.fallback, fill && styles.fillSurface, compact && styles.compactSurface]}>
         <Text style={styles.label}>{label}</Text>
         <Text style={styles.state}>{streamURL ? "RTCView indisponibil în build" : "Stream indisponibil"}</Text>
       </View>
@@ -26,12 +27,12 @@ export function NativeVideoSurface({ streamURL, label, compact = false }: Props)
   }
 
   return (
-    <View style={[styles.wrap, compact && styles.compactSurface]}>
+    <View style={[styles.wrap, fill && styles.fillSurface, compact && styles.compactSurface]}>
       <RTCView
         streamURL={streamURL}
         style={StyleSheet.absoluteFillObject}
         objectFit="cover"
-        mirror={label.toLowerCase().includes("local")}
+        mirror={label.toLowerCase().includes("local") || label.toLowerCase().includes("tu")}
         zOrder={compact ? 1 : 0}
       />
       <View style={styles.badge}>
@@ -52,8 +53,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
+  fillSurface: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 0,
+    marginTop: 0,
+    borderWidth: 0,
+  },
   compactSurface: {
     height: 118,
+    borderRadius: 18,
+    marginTop: 0,
   },
   fallback: {
     width: "100%",
