@@ -10,6 +10,7 @@ import {
 } from "@/lib/calls/signaling"
 import { closeWebRtcManager, createWebRtcManager, prepareWebRtcLocalStream } from "@/lib/calls/webrtc"
 import { startIncomingCallFeedback, stopIncomingCallFeedback } from "@/lib/calls/ringtone"
+import { cancelNativeIncomingCall, displayNativeIncomingCall } from "@/lib/nativeIncomingCall"
 import { sendCallPush } from "@/lib/push"
 import { useCallMedia } from "@/hooks/useCallMedia"
 
@@ -32,6 +33,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
   const { mediaReady, startMedia, stopMedia } = useCallMedia()
 
   const resetCallFlow = useCallback(async (status = "Închis") => {
+    await cancelNativeIncomingCall(currentCallSessionId)
     await stopIncomingCallFeedback()
     await stopMedia()
     await closeWebRtcManager()
@@ -39,7 +41,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
     setCurrentCallSessionId(null)
     setCallUiState("idle")
     setWebrtcStatus(status)
-  }, [stopMedia])
+  }, [currentCallSessionId, stopMedia])
 
   const receiveIncomingCall = useCallback(async (call: IncomingCall, incomingCallerName = "VIVOS") => {
     setIncomingCall(call)
@@ -47,6 +49,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
     setCurrentCallType(call.callType)
     setWebrtcStatus("În așteptare")
     setCallUiState("incoming")
+    await displayNativeIncomingCall({ callerName: incomingCallerName, call })
     await startIncomingCallFeedback(incomingCallerName, call.callType)
   }, [])
 
@@ -113,6 +116,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
 
     try {
       setCallBusy(true)
+      await cancelNativeIncomingCall(incomingCall.callSessionId)
       await stopIncomingCallFeedback()
       await startMedia(incomingCall.callType)
       await createWebRtcManager(incomingCall.callType)
@@ -157,6 +161,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
 
     try {
       setCallBusy(true)
+      await cancelNativeIncomingCall(incomingCall.callSessionId)
       await stopIncomingCallFeedback()
       await rejectCallSession(incomingCall.callSessionId)
 
@@ -188,6 +193,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
     try {
       await stopIncomingCallFeedback()
       if (currentCallSessionId) {
+        await cancelNativeIncomingCall(currentCallSessionId)
         await endCallSession(currentCallSessionId)
 
         if (userId) {
