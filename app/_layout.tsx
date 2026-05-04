@@ -2,6 +2,7 @@ import { Stack, useRouter, useSegments } from "expo-router"
 import { ActivityIndicator, AppState, View } from "react-native"
 import { StatusBar } from "expo-status-bar"
 import { useEffect } from "react"
+import { AppErrorBoundary } from "@/components/system/AppErrorBoundary"
 import { useAuthSession } from "@/hooks/useAuthSession"
 import { clearNativeBadge, requestNotificationPermissions } from "@/lib/notifications"
 import { theme } from "@/lib/theme"
@@ -48,7 +49,7 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <AppErrorBoundary>
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.bgBottom } }}>
         <Stack.Screen name="index" />
@@ -59,6 +60,6 @@ export default function RootLayout() {
         <Stack.Screen name="profile" />
         <Stack.Screen name="chat/[id]" />
       </Stack>
-    </>
+    </AppErrorBoundary>
   )
 }
