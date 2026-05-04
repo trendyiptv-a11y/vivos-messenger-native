@@ -1,6 +1,7 @@
 import { ReactNode } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
+import { BrandGradientText } from "@/components/ui/BrandGradientText"
 import { theme } from "@/lib/theme"
 
 type Props = {
@@ -10,13 +11,42 @@ type Props = {
   right?: ReactNode
 }
 
+function HeaderEyebrow({ eyebrow }: { eyebrow?: string }) {
+  if (!eyebrow) return null
+
+  const normalized = eyebrow.trim()
+  const upper = normalized.toUpperCase()
+
+  if (upper === "VIVOS" || upper === "VIVOS MESSENGER") {
+    const suffix = upper === "VIVOS MESSENGER" ? "Messenger" : ""
+    return (
+      <View style={styles.brandRow}>
+        <BrandGradientText text="VIVOS" style={styles.brandText} />
+        {suffix ? <Text style={styles.brandSuffix}>{suffix}</Text> : null}
+      </View>
+    )
+  }
+
+  if (upper.startsWith("VIVOS ")) {
+    const suffix = normalized.slice(6)
+    return (
+      <View style={styles.brandRow}>
+        <BrandGradientText text="VIVOS" style={styles.brandText} />
+        <Text style={styles.brandSuffix}>{suffix}</Text>
+      </View>
+    )
+  }
+
+  return <Text style={styles.eyebrow}>{eyebrow}</Text>
+}
+
 export function ScreenHeader({ eyebrow, title, left, right }: Props) {
   return (
     <SafeAreaView edges={["top"]} style={styles.safe}>
       <View style={styles.row}>
         <View style={styles.side}>{left}</View>
         <View style={styles.center}>
-          {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+          <HeaderEyebrow eyebrow={eyebrow} />
           <Text style={styles.title}>{title}</Text>
         </View>
         <View style={[styles.side, styles.right]}>{right}</View>
@@ -55,6 +85,25 @@ const styles = StyleSheet.create({
   },
   center: {
     flex: 1,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  brandText: {
+    fontSize: 12,
+    lineHeight: 15,
+    letterSpacing: 2.2,
+    fontWeight: "900",
+  },
+  brandSuffix: {
+    color: "rgba(255,255,255,0.62)",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "700",
+    letterSpacing: 1.6,
+    textTransform: "uppercase",
   },
   eyebrow: {
     color: theme.colors.textDim,
