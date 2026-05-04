@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { KeyboardAvoidingView, Platform, StyleSheet } from "react-native"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
@@ -31,6 +31,7 @@ export default function ChatScreenIntegrated() {
     sending,
     userId,
     messages,
+    members,
     body,
     setBody,
     otherMember,
@@ -39,6 +40,11 @@ export default function ChatScreenIntegrated() {
   } = useChatConversation(conversationId)
 
   const [menuOpen, setMenuOpen] = useState(false)
+
+  const selfName = useMemo(() => {
+    const self = members.find((member) => member.member_id === userId)
+    return self?.name?.trim() || self?.alias?.trim() || self?.email?.trim() || "VIVOS"
+  }, [members, userId])
 
   const {
     callUiState,
@@ -49,7 +55,6 @@ export default function ChatScreenIntegrated() {
     mediaReady,
     startMedia,
     receiveIncomingCall,
-    setCurrentCallSessionId,
     setCurrentCallType,
     setCallUiState,
     setWebrtcStatus,
@@ -62,6 +67,7 @@ export default function ChatScreenIntegrated() {
     conversationId,
     userId,
     calleeId: otherMember?.member_id ?? null,
+    callerName: selfName,
     callChannelRef,
   })
 
