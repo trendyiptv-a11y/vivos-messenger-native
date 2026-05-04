@@ -1,9 +1,10 @@
 import { useState } from "react"
-import { Text, View, Image, StyleSheet, Pressable } from "react-native"
+import { Text, View, Image, StyleSheet, Pressable, ScrollView } from "react-native"
 import { useRouter } from "expo-router"
 import { AppShell } from "@/components/ui/AppShell"
 import { AppInput } from "@/components/ui/AppInput"
 import { AppButton } from "@/components/ui/AppButton"
+import { PasswordInput } from "@/components/ui/PasswordInput"
 import { supabase } from "@/lib/supabase"
 import { theme } from "@/lib/theme"
 
@@ -59,8 +60,12 @@ export default function LoginScreen() {
   }
 
   return (
-    <AppShell>
-      <View style={styles.centerWrap}>
+    <AppShell padded={false}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         <View style={styles.card}>
           <View style={styles.logoWrap}>
             <Image source={require("@/assets/images/logo.png")} style={styles.logo} resizeMode="contain" />
@@ -70,7 +75,7 @@ export default function LoginScreen() {
 
           <View style={styles.form}>
             <AppInput label="Email" placeholder="nume@email.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-            <AppInput label="Parolă" placeholder="Parola ta" value={password} onChangeText={setPassword} secureTextEntry />
+            <PasswordInput label="Parolă" placeholder="Parola ta" value={password} onChangeText={setPassword} />
 
             <Pressable disabled={resetLoading} onPress={handleForgotPassword} hitSlop={10} style={({ pressed }) => [styles.forgotButton, pressed && styles.forgotPressed]}>
               <Text style={styles.forgot}>{resetLoading ? "Se trimite..." : "Ai uitat parola?"}</Text>
@@ -82,15 +87,17 @@ export default function LoginScreen() {
             <AppButton title="Creează cont" onPress={() => router.push("/signup")} variant="outline" />
           </View>
         </View>
-      </View>
+      </ScrollView>
     </AppShell>
   )
 }
 
 const styles = StyleSheet.create({
-  centerWrap: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 28,
   },
   card: {
     borderRadius: 32,
@@ -99,12 +106,12 @@ const styles = StyleSheet.create({
   },
   logoWrap: {
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   logo: {
-    width: 92,
-    height: 92,
-    borderRadius: 24,
+    width: 82,
+    height: 82,
+    borderRadius: 22,
   },
   eyebrow: {
     textAlign: "center",
