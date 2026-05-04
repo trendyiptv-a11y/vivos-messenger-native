@@ -1,12 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { router, usePathname } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
+import { t } from "@/lib/i18n"
 import { theme } from "@/lib/theme"
 
 const items = [
-  { key: "inbox", label: "Mesaje", href: "/inbox", icon: "chatbubble-outline" as const, iconActive: "chatbubble" as const },
-  { key: "calls", label: "Apeluri", href: "/calls", icon: "call-outline" as const, iconActive: "call" as const },
-  { key: "profile", label: "Profil", href: "/profile", icon: "person-outline" as const, iconActive: "person" as const },
+  { key: "inbox", labelKey: "messages" as const, href: "/inbox", icon: "chatbubble-outline" as const, iconActive: "chatbubble" as const },
+  { key: "calls", labelKey: "calls" as const, href: "/calls", icon: "call-outline" as const, iconActive: "call" as const },
+  { key: "profile", labelKey: "profile" as const, href: "/profile", icon: "person-outline" as const, iconActive: "person" as const },
 ]
 
 export function BottomTabBar() {
@@ -28,7 +29,7 @@ export function BottomTabBar() {
             <View style={[styles.iconCircle, active && styles.iconCircleActive]}>
               <Ionicons name={active ? item.iconActive : item.icon} color={active ? "white" : theme.colors.textSoft} size={21} />
             </View>
-            <Text style={[styles.label, active && styles.labelActive]}>{item.label}</Text>
+            <Text style={[styles.label, active && styles.labelActive]}>{t(item.labelKey)}</Text>
           </Pressable>
         )
       })}
