@@ -89,6 +89,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
 
       sendCallPush({
         targetUserId: calleeId,
+        callerUserId: userId,
         conversationId,
         callerName,
         callType,
