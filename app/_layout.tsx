@@ -2,9 +2,11 @@ import { Stack, useRouter, useSegments } from "expo-router"
 import { ActivityIndicator, AppState, View } from "react-native"
 import { StatusBar } from "expo-status-bar"
 import { useEffect } from "react"
+import * as Notifications from "expo-notifications"
 import { AppErrorBoundary } from "@/components/system/AppErrorBoundary"
 import { useAuthSession } from "@/hooks/useAuthSession"
 import { clearNativeBadge, requestNotificationPermissions } from "@/lib/notifications"
+import { routeInitialNotificationResponse, routeNotificationResponse } from "@/lib/notificationRouting"
 import { theme } from "@/lib/theme"
 
 export default function RootLayout() {
@@ -38,6 +40,18 @@ export default function RootLayout() {
 
     return () => subscription.remove()
   }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated || loading) return
+
+    routeInitialNotificationResponse(router)
+
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      routeNotificationResponse(router, response)
+    })
+
+    return () => responseSubscription.remove()
+  }, [isAuthenticated, loading, router])
 
   if (loading) {
     return (
