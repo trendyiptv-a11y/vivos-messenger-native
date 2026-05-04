@@ -5,7 +5,6 @@ import { Ionicons } from "@expo/vector-icons"
 import { AppShell } from "@/components/ui/AppShell"
 import { ScreenHeader } from "@/components/ui/ScreenHeader"
 import { BottomTabBar } from "@/components/ui/BottomTabBar"
-import { AppButton } from "@/components/ui/AppButton"
 import { supabase } from "@/lib/supabase"
 import { gradientTextSeed, theme } from "@/lib/theme"
 
@@ -67,7 +66,7 @@ export default function InboxScreen() {
         .from("conversations")
         .select("id, created_at")
         .order("created_at", { ascending: false })
-        .limit(30)
+        .limit(50)
 
       if (convError) throw convError
       if (!mountedRef.current) return
@@ -201,8 +200,6 @@ export default function InboxScreen() {
     return cards.filter((card) => [card.name, card.email || "", card.preview].some((v) => v.toLowerCase().includes(term)))
   }, [cards, search])
 
-  const totalUnread = useMemo(() => Object.values(unreadByConv).reduce((sum, value) => sum + value, 0), [unreadByConv])
-
   function openChat(conversationId: string) {
     router.push(`/chat/${conversationId}`)
   }
@@ -210,194 +207,144 @@ export default function InboxScreen() {
   return (
     <AppShell padded={false}>
       <ScreenHeader eyebrow="VIVOS" title="Messenger" />
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.heroCard}>
-          <Text style={styles.eyebrow}>Mesaje private</Text>
-          <Text style={styles.heroTitle}>Spațiu direct de legătură</Text>
-          <Text style={styles.heroBody}>Mesaje clare, apeluri rapide și contact uman fără zgomot inutil.</Text>
-          <AppButton title="Deschide apeluri" onPress={() => router.replace("/calls")} leftIcon={<Ionicons name="call-outline" size={18} color="white" />} />
-
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}><Text style={styles.statLabel}>Conversații</Text><Text style={styles.statValue}>{cards.length}</Text></View>
-            <View style={styles.statCard}><Text style={styles.statLabel}>Necitite</Text><Text style={styles.statValue}>{totalUnread}</Text></View>
-            <View style={styles.statCard}><Text style={styles.statLabel}>Active</Text><Text style={styles.statValue}>{cards.filter((card) => card.unreadCount > 0).length}</Text></View>
-          </View>
-        </View>
-
+      <View style={styles.content}>
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={18} color={theme.colors.textDim} />
-          <TextInput value={search} onChangeText={setSearch} placeholder="Caută în conversații..." placeholderTextColor={theme.colors.textDim} style={styles.searchInput} />
+          <TextInput value={search} onChangeText={setSearch} placeholder="Caută conversații..." placeholderTextColor={theme.colors.textDim} style={styles.searchInput} />
         </View>
 
-        {loading ? (
-          <Text style={styles.helper}>Se încarcă conversațiile...</Text>
-        ) : filtered.length === 0 ? (
-          <Text style={styles.helper}>Nicio conversație încă.</Text>
-        ) : (
-          filtered.map((card) => (
-            <Pressable key={card.id} onPress={() => openChat(card.id)} style={[styles.convCard, card.unreadCount > 0 && styles.convCardUnread]}>
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarText}>{gradientTextSeed(card.email || card.name)}</Text>
-              </View>
-              <View style={styles.convBody}>
-                <View style={styles.convTop}>
-                  <Text numberOfLines={1} style={[styles.convName, card.unreadCount > 0 && styles.convNameUnread]}>{card.name}</Text>
-                  <View style={styles.convMetaRight}>
+        <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+          {loading ? (
+            <Text style={styles.helper}>Se încarcă conversațiile...</Text>
+          ) : filtered.length === 0 ? (
+            <Text style={styles.helper}>Nicio conversație încă.</Text>
+          ) : (
+            filtered.map((card) => (
+              <Pressable key={card.id} onPress={() => openChat(card.id)} style={({ pressed }) => [styles.convCard, card.unreadCount > 0 && styles.convCardUnread, pressed && styles.cardPressed]}>
+                <View style={styles.avatarCircle}>
+                  <Text style={styles.avatarText}>{gradientTextSeed(card.email || card.name)}</Text>
+                </View>
+                <View style={styles.convBody}>
+                  <View style={styles.convTop}>
+                    <Text numberOfLines={1} style={[styles.convName, card.unreadCount > 0 && styles.convNameUnread]}>{card.name}</Text>
                     <Text style={styles.convDate}>{new Date(card.date).toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit" })}</Text>
+                  </View>
+                  <View style={styles.previewRow}>
+                    <Text numberOfLines={1} style={[styles.convPreview, card.unreadCount > 0 && styles.convPreviewUnread]}>{card.preview}</Text>
                     {card.unreadCount > 0 ? (
                       <View style={styles.unreadBadge}><Text style={styles.unreadBadgeText}>{card.unreadCount > 99 ? "99+" : card.unreadCount}</Text></View>
                     ) : null}
                   </View>
                 </View>
-                <Text numberOfLines={1} style={[styles.convPreview, card.unreadCount > 0 && styles.convPreviewUnread]}>{card.preview}</Text>
-              </View>
-            </Pressable>
-          ))
-        )}
-      </ScrollView>
+              </Pressable>
+            ))
+          )}
+        </ScrollView>
+      </View>
       <BottomTabBar />
     </AppShell>
   )
 }
 
 const styles = StyleSheet.create({
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    gap: 14,
-  },
-  heroCard: {
-    borderRadius: 28,
-    padding: 18,
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    gap: 12,
-  },
-  eyebrow: {
-    color: theme.colors.textDim,
-    textTransform: "uppercase",
-    letterSpacing: 2,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  heroTitle: {
-    color: theme.colors.text,
-    fontSize: 28,
-    fontWeight: "800",
-  },
-  heroBody: {
-    color: theme.colors.textSoft,
-    fontSize: 16,
-    lineHeight: 23,
-  },
-  statsRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  statCard: {
+  content: {
     flex: 1,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    padding: 14,
-  },
-  statLabel: {
-    color: theme.colors.textDim,
-    fontSize: 11,
-    textTransform: "uppercase",
-    fontWeight: "700",
-  },
-  statValue: {
-    color: theme.colors.text,
-    fontSize: 28,
-    fontWeight: "800",
-    marginTop: 6,
+    paddingHorizontal: 20,
+    gap: 14,
   },
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    borderRadius: 20,
+    borderRadius: 22,
     paddingHorizontal: 14,
-    backgroundColor: theme.colors.inputBg,
+    backgroundColor: "rgba(255,255,255,0.07)",
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    minHeight: 54,
+    borderColor: "rgba(255,255,255,0.10)",
+    minHeight: 50,
   },
   searchInput: {
     flex: 1,
     color: theme.colors.text,
     fontSize: 16,
   },
+  listContent: {
+    gap: 10,
+    paddingBottom: 24,
+  },
   helper: {
     color: theme.colors.textSoft,
     textAlign: "center",
-    paddingVertical: 20,
+    paddingVertical: 28,
     fontSize: 15,
   },
   convCard: {
     flexDirection: "row",
     gap: 14,
     alignItems: "center",
-    borderRadius: 26,
-    padding: 16,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 24,
+    padding: 14,
+    backgroundColor: "rgba(255,255,255,0.055)",
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: "rgba(255,255,255,0.09)",
+  },
+  cardPressed: {
+    opacity: 0.78,
   },
   convCardUnread: {
-    backgroundColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.105)",
     borderColor: "rgba(255,255,255,0.18)",
   },
   avatarCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(154,113,193,0.55)",
+    backgroundColor: "rgba(154,113,193,0.62)",
   },
   avatarText: {
     color: "white",
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 19,
+    fontWeight: "900",
   },
   convBody: {
     flex: 1,
+    gap: 6,
   },
   convTop: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
-  },
-  convMetaRight: {
-    alignItems: "flex-end",
-    gap: 5,
+    gap: 10,
   },
   convName: {
     flex: 1,
     color: theme.colors.text,
     fontSize: 17,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   convNameUnread: {
-    fontWeight: "800",
+    fontWeight: "900",
   },
   convDate: {
     color: theme.colors.textDim,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  previewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   convPreview: {
+    flex: 1,
     color: theme.colors.textSoft,
     fontSize: 14,
-    marginTop: 4,
   },
   convPreviewUnread: {
     color: theme.colors.text,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   unreadBadge: {
     minWidth: 22,
@@ -411,6 +358,6 @@ const styles = StyleSheet.create({
   unreadBadgeText: {
     color: "white",
     fontSize: 11,
-    fontWeight: "800",
+    fontWeight: "900",
   },
 })
