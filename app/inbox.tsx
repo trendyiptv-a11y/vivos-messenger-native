@@ -6,6 +6,7 @@ import { AppShell } from "@/components/ui/AppShell"
 import { ScreenHeader } from "@/components/ui/ScreenHeader"
 import { BottomTabBar } from "@/components/ui/BottomTabBar"
 import { supabase } from "@/lib/supabase"
+import { t } from "@/lib/i18n"
 import { gradientTextSeed, theme } from "@/lib/theme"
 
 type ConversationRow = { id: string; created_at: string }
@@ -210,14 +211,14 @@ export default function InboxScreen() {
       <View style={styles.content}>
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={18} color={theme.colors.textDim} />
-          <TextInput value={search} onChangeText={setSearch} placeholder="Caută conversații..." placeholderTextColor={theme.colors.textDim} style={styles.searchInput} />
+          <TextInput value={search} onChangeText={setSearch} placeholder={t("searchConversations")} placeholderTextColor={theme.colors.textDim} style={styles.searchInput} />
         </View>
 
         <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
           {loading ? (
-            <Text style={styles.helper}>Se încarcă conversațiile...</Text>
+            <Text style={styles.helper}>{t("loadingConversations")}</Text>
           ) : filtered.length === 0 ? (
-            <Text style={styles.helper}>Nicio conversație încă.</Text>
+            <Text style={styles.helper}>{t("noConversations")}</Text>
           ) : (
             filtered.map((card) => (
               <Pressable key={card.id} onPress={() => openChat(card.id)} style={({ pressed }) => [styles.convCard, card.unreadCount > 0 && styles.convCardUnread, pressed && styles.cardPressed]}>
@@ -227,7 +228,7 @@ export default function InboxScreen() {
                 <View style={styles.convBody}>
                   <View style={styles.convTop}>
                     <Text numberOfLines={1} style={[styles.convName, card.unreadCount > 0 && styles.convNameUnread]}>{card.name}</Text>
-                    <Text style={styles.convDate}>{new Date(card.date).toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit" })}</Text>
+                    <Text style={styles.convDate}>{new Date(card.date).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" })}</Text>
                   </View>
                   <View style={styles.previewRow}>
                     <Text numberOfLines={1} style={[styles.convPreview, card.unreadCount > 0 && styles.convPreviewUnread]}>{card.preview}</Text>
