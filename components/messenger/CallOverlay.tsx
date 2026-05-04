@@ -1,6 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
-import { theme } from "@/lib/theme"
 import { CallUiState, CallType } from "@/types/call"
 import { WebRtcManagerState } from "@/lib/calls/webrtc"
 import { NativeVideoSurface } from "@/components/messenger/NativeVideoSurface"
@@ -27,12 +26,6 @@ function statusLabel(callUiState: CallUiState, callType: CallType) {
   if (callUiState === "incoming") return callType === "video" ? "Apel video primit" : "Apel audio primit"
   if (callUiState === "outgoing") return callType === "video" ? "Se apelează..." : "Se apelează audio..."
   return callType === "video" ? "Apel video conectat" : "Apel audio conectat"
-}
-
-function shortStatus(state: WebRtcManagerState | null, mediaReady: boolean, webrtcStatus: string) {
-  const local = state?.localStreamURL ? "local da" : mediaReady ? "media da" : "media nu"
-  const remote = state?.remoteStreamURL ? "remote da" : "remote nu"
-  return `${webrtcStatus} · ${local} · ${remote}`
 }
 
 type ControlButtonProps = {
@@ -88,8 +81,6 @@ export function CallOverlay({
   otherName,
   callUiState,
   currentCallType,
-  mediaReady,
-  webrtcStatus,
   currentWebRtcState,
   callBusy,
   onAccept,
@@ -154,11 +145,6 @@ export function CallOverlay({
           )}
         </View>
       ) : null}
-
-      <View style={styles.debugPill}>
-        <Ionicons name="radio-outline" size={13} color="rgba(255,255,255,0.70)" />
-        <Text numberOfLines={1} style={styles.debugText}>{shortStatus(currentWebRtcState, mediaReady, webrtcStatus)}</Text>
-      </View>
 
       <View style={styles.controlDock}>
         <View style={styles.dockHandle} />
@@ -311,7 +297,7 @@ const styles = StyleSheet.create({
   },
   centerSymbolArea: {
     position: "absolute",
-    top: "37%",
+    top: "40%",
     left: 0,
     right: 0,
     alignItems: "center",
@@ -371,27 +357,6 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 38,
     fontWeight: "900",
-  },
-  debugPill: {
-    position: "absolute",
-    left: 24,
-    right: 24,
-    bottom: 142,
-    minHeight: 32,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(255,255,255,0.055)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  debugText: {
-    flex: 1,
-    color: "rgba(255,255,255,0.56)",
-    fontSize: 11,
-    fontWeight: "600",
   },
   controlDock: {
     position: "absolute",
