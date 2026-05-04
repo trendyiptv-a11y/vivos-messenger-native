@@ -36,13 +36,16 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.VIBRATE",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.USE_FULL_SCREEN_INTENT",
+        "android.permission.WAKE_LOCK"
       ]
     },
     "plugins": [
       "expo-router",
       "expo-localization",
       "expo-notifications",
+      "./plugins/withVivosFullScreenCall",
       [
         "expo-dev-client",
         {
