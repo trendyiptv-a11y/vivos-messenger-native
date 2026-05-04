@@ -11,7 +11,11 @@ import {
   getNativeWebRtcSession,
   markNativeRemoteStreamReady,
   prepareNativeLocalStream,
+  setNativeCameraEnabled,
   setNativeIceCandidateHandler,
+  setNativeMicrophoneEnabled,
+  setNativeSpeakerEnabled,
+  switchNativeCamera,
 } from "@/lib/calls/webrtcNativeAdapter"
 
 export type WebRtcManagerState = {
@@ -28,6 +32,9 @@ export type WebRtcManagerState = {
   localStreamURL: string | null
   remoteStreamURL: string | null
   connectionState: WebRtcConnectionStateLike
+  microphoneEnabled: boolean
+  cameraEnabled: boolean
+  speakerEnabled: boolean
 }
 
 let currentState: WebRtcManagerState | null = null
@@ -46,6 +53,9 @@ function syncNativeFlags() {
   currentState.localStreamURL = nativeSession?.localURL ?? null
   currentState.remoteStreamURL = nativeSession?.remoteURL ?? null
   currentState.connectionState = nativeSession?.connectionState ?? "unknown"
+  currentState.microphoneEnabled = nativeSession?.microphoneEnabled ?? true
+  currentState.cameraEnabled = nativeSession?.cameraEnabled ?? currentState.callType === "video"
+  currentState.speakerEnabled = nativeSession?.speakerEnabled ?? currentState.callType === "video"
 
   const nativeDiagnostics = nativeSession?.diagnostics ?? []
   const combined = [...currentState.diagnostics, ...nativeDiagnostics]
@@ -90,6 +100,9 @@ export async function createWebRtcManager(callType: CallType) {
     localStreamURL: null,
     remoteStreamURL: null,
     connectionState: "new",
+    microphoneEnabled: true,
+    cameraEnabled: callType === "video",
+    speakerEnabled: callType === "video",
   }
 
   bindNativeIceHandler()
@@ -109,6 +122,33 @@ export async function prepareWebRtcLocalStream() {
   await prepareNativeLocalStream()
   syncNativeFlags()
   pushDiagnostic("Local stream pregătit")
+}
+
+export function toggleWebRtcMicrophone() {
+  const next = !(currentState?.microphoneEnabled ?? true)
+  setNativeMicrophoneEnabled(next)
+  syncNativeFlags()
+  return next
+}
+
+export function toggleWebRtcCamera() {
+  const next = !(currentState?.cameraEnabled ?? true)
+  setNativeCameraEnabled(next)
+  syncNativeFlags()
+  return next
+}
+
+export async function switchWebRtcCamera() {
+  const switched = await switchNativeCamera()
+  syncNativeFlags()
+  return switched
+}
+
+export function toggleWebRtcSpeaker() {
+  const next = !(currentState?.speakerEnabled ?? currentState?.callType === "video")
+  setNativeSpeakerEnabled(next)
+  syncNativeFlags()
+  return next
 }
 
 export async function createLocalOffer(): Promise<SessionDescriptionLike> {
