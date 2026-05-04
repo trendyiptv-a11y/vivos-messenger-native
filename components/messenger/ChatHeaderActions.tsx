@@ -10,6 +10,7 @@ type Props = {
   setMenuOpen: (value: boolean | ((prev: boolean) => boolean)) => void
   onStartCall: (callType: CallType) => void
   onLogout: () => void
+  onOpenMessages: () => void
 }
 
 function MenuRow({ icon, label, danger = false, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; danger?: boolean; onPress: () => void }) {
@@ -21,14 +22,26 @@ function MenuRow({ icon, label, danger = false, onPress }: { icon: keyof typeof 
   )
 }
 
-export function ChatHeaderActions({ menuOpen, setMenuOpen, onStartCall, onLogout }: Props) {
+export function ChatHeaderActions({ menuOpen, setMenuOpen, onStartCall, onLogout, onOpenMessages }: Props) {
   function closeMenu() {
     setMenuOpen(false)
   }
 
-  function navigateTo(href: "/inbox" | "/calls" | "/profile") {
+  function navigateTo(href: "/calls" | "/profile") {
     closeMenu()
-    router.replace(href as never)
+    setTimeout(() => {
+      router.replace(href as never)
+    }, 80)
+  }
+
+  function handleMessagesPress() {
+    closeMenu()
+    setTimeout(onOpenMessages, 80)
+  }
+
+  function handleLogoutPress() {
+    closeMenu()
+    setTimeout(onLogout, 80)
   }
 
   return (
@@ -45,21 +58,13 @@ export function ChatHeaderActions({ menuOpen, setMenuOpen, onStartCall, onLogout
 
       <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={closeMenu} statusBarTranslucent>
         <Pressable style={styles.backdrop} onPress={closeMenu}>
-          <Pressable style={styles.menuCard} onPress={(event) => event.stopPropagation()}>
+          <Pressable style={styles.menuCard}>
             <Text style={styles.menuTitle}>Conversație</Text>
-            <MenuRow icon="chatbubble-outline" label="Mesaje" onPress={() => navigateTo("/inbox")} />
+            <MenuRow icon="chatbubble-outline" label="Mesaje" onPress={handleMessagesPress} />
             <MenuRow icon="call-outline" label="Apeluri" onPress={() => navigateTo("/calls")} />
             <MenuRow icon="person-outline" label="Profil" onPress={() => navigateTo("/profile")} />
             <View style={styles.menuDivider} />
-            <MenuRow
-              icon="log-out-outline"
-              label="Logout"
-              danger
-              onPress={() => {
-                closeMenu()
-                onLogout()
-              }}
-            />
+            <MenuRow icon="log-out-outline" label="Logout" danger onPress={handleLogoutPress} />
           </Pressable>
         </Pressable>
       </Modal>
