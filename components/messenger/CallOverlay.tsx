@@ -1,7 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import { CallUiState, CallType } from "@/types/call"
-import { WebRtcManagerState } from "@/lib/calls/webrtc"
+import {
+  toggleWebRtcCamera,
+  toggleWebRtcMicrophone,
+  toggleWebRtcSpeaker,
+  switchWebRtcCamera,
+  WebRtcManagerState,
+} from "@/lib/calls/webrtc"
 import { NativeVideoSurface } from "@/components/messenger/NativeVideoSurface"
 
 type Props = {
@@ -34,9 +40,10 @@ type ControlButtonProps = {
   danger?: boolean
   disabled?: boolean
   large?: boolean
+  active?: boolean
 }
 
-function ControlButton({ icon, onPress, danger = false, disabled = false, large = false }: ControlButtonProps) {
+function ControlButton({ icon, onPress, danger = false, disabled = false, large = false, active = true }: ControlButtonProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -45,6 +52,7 @@ function ControlButton({ icon, onPress, danger = false, disabled = false, large 
         styles.controlButton,
         large && styles.controlButtonLarge,
         danger && styles.controlButtonDanger,
+        !active && styles.controlButtonInactive,
         pressed && styles.pressed,
       ]}
     >
@@ -96,6 +104,9 @@ export function CallOverlay({
   const showPreview = isVideo && Boolean(localURL)
   const isIncoming = callUiState === "incoming"
   const isConnected = callUiState === "connected"
+  const micEnabled = currentWebRtcState?.microphoneEnabled ?? true
+  const cameraEnabled = currentWebRtcState?.cameraEnabled ?? isVideo
+  const speakerEnabled = currentWebRtcState?.speakerEnabled ?? isVideo
 
   return (
     <View style={styles.overlay}>
@@ -117,8 +128,8 @@ export function CallOverlay({
           <Ionicons name={isIncoming ? "chevron-down" : "chevron-back"} size={28} color="white" />
         </Pressable>
 
-        <Pressable style={styles.topRoundButton}>
-          <Ionicons name="mic-off-outline" size={25} color="white" />
+        <Pressable onPress={toggleWebRtcMicrophone} style={[styles.topRoundButton, !micEnabled && styles.controlButtonInactive]}>
+          <Ionicons name={micEnabled ? "mic-outline" : "mic-off-outline"} size={25} color="white" />
         </Pressable>
       </View>
 
@@ -130,7 +141,14 @@ export function CallOverlay({
 
       {showPreview ? (
         <View style={styles.localPreviewCard}>
-          <NativeVideoSurface label="Tu" streamURL={localURL} compact />
+          {cameraEnabled ? (
+            <NativeVideoSurface label="Tu" streamURL={localURL} compact />
+          ) : (
+            <View style={styles.previewOff}>
+              <Ionicons name="videocam-off-outline" size={26} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.previewOffText}>Camera oprită</Text>
+            </View>
+          )}
         </View>
       ) : null}
 
@@ -150,18 +168,18 @@ export function CallOverlay({
         <View style={styles.dockHandle} />
         {isIncoming ? (
           <>
-            <ControlButton icon="mic-outline" />
-            <ControlButton icon={isVideo ? "videocam-outline" : "call-outline"} />
-            <ControlButton icon="volume-high-outline" />
+            <ControlButton icon={micEnabled ? "mic-outline" : "mic-off-outline"} onPress={toggleWebRtcMicrophone} active={micEnabled} />
+            <ControlButton icon={isVideo ? (cameraEnabled ? "videocam-outline" : "videocam-off-outline") : "call-outline"} onPress={isVideo ? toggleWebRtcCamera : undefined} active={!isVideo || cameraEnabled} />
+            <ControlButton icon={speakerEnabled ? "volume-high-outline" : "volume-mute-outline"} onPress={toggleWebRtcSpeaker} active={speakerEnabled} />
             <ControlButton icon="call-outline" onPress={onReject} danger disabled={callBusy} large />
             <ControlButton icon={isVideo ? "videocam" : "call"} onPress={onAccept} disabled={callBusy} large />
           </>
         ) : (
           <>
-            <ControlButton icon="mic-outline" />
-            <ControlButton icon="videocam-outline" />
-            <ControlButton icon="camera-reverse-outline" />
-            <ControlButton icon="volume-high-outline" />
+            <ControlButton icon={micEnabled ? "mic-outline" : "mic-off-outline"} onPress={toggleWebRtcMicrophone} active={micEnabled} />
+            <ControlButton icon={cameraEnabled ? "videocam-outline" : "videocam-off-outline"} onPress={isVideo ? toggleWebRtcCamera : undefined} active={!isVideo || cameraEnabled} />
+            <ControlButton icon="camera-reverse-outline" onPress={isVideo ? () => { switchWebRtcCamera() } : undefined} active={isVideo} />
+            <ControlButton icon={speakerEnabled ? "volume-high-outline" : "volume-mute-outline"} onPress={toggleWebRtcSpeaker} active={speakerEnabled} />
             <ControlButton icon="call-outline" onPress={onEnd} danger disabled={callBusy} large />
           </>
         )}
@@ -295,6 +313,18 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 10,
   },
+  previewOff: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "rgba(0,0,0,0.54)",
+  },
+  previewOffText: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   centerSymbolArea: {
     position: "absolute",
     top: "40%",
@@ -407,6 +437,10 @@ const styles = StyleSheet.create({
   controlButtonDanger: {
     backgroundColor: "#F04444",
     borderColor: "rgba(255,255,255,0.10)",
+  },
+  controlButtonInactive: {
+    backgroundColor: "rgba(255,255,255,0.045)",
+    opacity: 0.58,
   },
   pressed: {
     opacity: 0.76,
