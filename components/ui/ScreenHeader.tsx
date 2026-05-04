@@ -89,20 +89,20 @@ const styles = StyleSheet.create({
   brandRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
   },
   brandText: {
-    fontSize: 12,
-    lineHeight: 15,
-    letterSpacing: 2.2,
+    fontSize: 16,
+    lineHeight: 20,
+    letterSpacing: 2.8,
     fontWeight: "900",
   },
   brandSuffix: {
-    color: "rgba(255,255,255,0.62)",
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "700",
-    letterSpacing: 1.6,
+    color: "rgba(255,255,255,0.70)",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "800",
+    letterSpacing: 1.8,
     textTransform: "uppercase",
   },
   eyebrow: {
@@ -114,9 +114,10 @@ const styles = StyleSheet.create({
   },
   title: {
     color: theme.colors.text,
-    fontSize: 18,
-    fontWeight: "800",
-    marginTop: 2,
+    fontSize: 19,
+    fontWeight: "900",
+    letterSpacing: -0.25,
+    marginTop: 3,
   },
   iconButton: {
     width: 42,
