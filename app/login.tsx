@@ -38,7 +38,7 @@ export default function LoginScreen() {
       <View style={styles.centerWrap}>
         <View style={styles.card}>
           <View style={styles.logoWrap}>
-            <Image source={{ uri: "https://vivos-land.vercel.app/icons/icon-192.png" }} style={styles.logo} />
+            <Image source={require("@/assets/images/logo.png")} style={styles.logo} resizeMode="contain" />
           </View>
           <Text style={styles.eyebrow}>Messenger VIVOS</Text>
           <Text style={styles.title}>Intră în Messenger</Text>
@@ -75,9 +75,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   logo: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
+    width: 92,
+    height: 92,
+    borderRadius: 24,
   },
   eyebrow: {
     textAlign: "center",
