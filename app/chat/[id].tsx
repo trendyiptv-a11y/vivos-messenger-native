@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { KeyboardAvoidingView, Platform, StyleSheet } from "react-native"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
@@ -16,6 +16,7 @@ import { useChatConversation } from "@/hooks/useChatConversation"
 import { useIncomingCallChannel } from "@/hooks/useIncomingCallChannel"
 import { buildWebRtcSignalPayload, sendIceCandidateSignal } from "@/lib/calls/webrtcSignaling"
 import { getWebRtcManagerState } from "@/lib/calls/webrtc"
+import { clearIncomingCallState, getIncomingCallAction, getIncomingCallState } from "@/lib/calls/callState"
 import { theme } from "@/lib/theme"
 import { CallType } from "@/types/call"
 
@@ -24,6 +25,7 @@ export default function ChatScreenIntegrated() {
   const params = useLocalSearchParams<{ id: string }>()
   const conversationId = String(params.id || "")
   const callChannelRef = useRef<RealtimeChannel | null>(null)
+  const handledPendingCallRef = useRef<string | null>(null)
 
   const {
     scrollRef,
@@ -98,6 +100,38 @@ export default function ChatScreenIntegrated() {
       await resetCallFlow("Închis")
     },
   })
+
+  useEffect(() => {
+    if (!conversationId || loading) return
+
+    const pendingCall = getIncomingCallState()
+    if (!pendingCall || pendingCall.conversationId !== conversationId) return
+    if (handledPendingCallRef.current === pendingCall.callSessionId) return
+
+    handledPendingCallRef.current = pendingCall.callSessionId
+    const pendingAction = getIncomingCallAction()
+
+    async function applyPendingIncomingCall() {
+      await receiveIncomingCall(pendingCall, otherName)
+
+      if (pendingAction === "accept") {
+        // Give React one frame to render the incoming state before accepting.
+        setTimeout(() => {
+          acceptIncomingCall().catch((error) => console.warn("Auto-accept from notification failed", error))
+        }, 120)
+      }
+
+      if (pendingAction === "reject") {
+        setTimeout(() => {
+          rejectIncomingCall().catch((error) => console.warn("Auto-reject from notification failed", error))
+        }, 120)
+      }
+
+      clearIncomingCallState()
+    }
+
+    applyPendingIncomingCall().catch((error) => console.warn("Pending incoming call handling failed", error))
+  }, [acceptIncomingCall, conversationId, loading, otherName, receiveIncomingCall, rejectIncomingCall])
 
   async function handleStartCall(callType: CallType) {
     const session = await startOutgoingCall(callType)
