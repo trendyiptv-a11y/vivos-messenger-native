@@ -17,13 +17,14 @@ import {
   sendIceCandidateSignal,
   sendOfferSignal,
 } from "@/lib/calls/webrtcSignaling"
-import { CallType } from "@/types/call"
+import { CallType, IncomingCall } from "@/types/call"
 import { IceCandidateLike, SessionDescriptionLike } from "@/types/webrtc"
 
 type CallBroadcastPayload = {
   callSessionId?: string
   conversationId?: string
   fromUserId?: string
+  toUserId?: string
   callType?: string
   sdp?: SessionDescriptionLike
   candidate?: IceCandidateLike
@@ -35,11 +36,21 @@ type Args = {
   currentCallSessionId: string | null
   callChannelRef: React.MutableRefObject<RealtimeChannel | null>
   startMedia: (callType: CallType) => Promise<void>
-  setIncomingCall: (call: null) => void
+  setIncomingCall: (call: IncomingCall | null) => void | Promise<void>
   setCurrentCallType: (callType: CallType) => void
   setCallUiState: (state: "idle" | "outgoing" | "incoming" | "connected") => void
   setWebrtcStatus: (status: string) => void
   resetCallFlow: (status?: string) => Promise<void>
+}
+
+function payloadToIncomingCall(payload: CallBroadcastPayload): IncomingCall | null {
+  if (!payload.callSessionId || !payload.conversationId || !payload.fromUserId) return null
+  return {
+    callSessionId: String(payload.callSessionId),
+    conversationId: String(payload.conversationId),
+    fromUserId: String(payload.fromUserId),
+    callType: payload.callType === "video" ? "video" : "audio",
+  }
 }
 
 export function useChatCallSignaling({
@@ -88,6 +99,13 @@ export function useChatCallSignaling({
 
     const callChannel = supabase
       .channel(`call:conversation:${conversationId}`)
+      .on("broadcast", { event: "call_invite" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
+        if (!active || !userId) return
+        if (payload?.toUserId !== userId || payload.fromUserId === userId) return
+        const incoming = payloadToIncomingCall(payload)
+        if (!incoming) return
+        await setIncomingCall(incoming)
+      })
       .on("broadcast", { event: "call_accept" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
         if (!active) return
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !userId) return
@@ -108,7 +126,7 @@ export function useChatCallSignaling({
           if (!active) return
           setCurrentCallType(acceptedType)
           setWebrtcStatus("Offer local trimis")
-          setIncomingCall(null)
+          await setIncomingCall(null)
           setCallUiState("connected")
         } catch (error) {
           console.warn("call_accept handling failed", error)
