@@ -1,5 +1,6 @@
 import * as Notifications from "expo-notifications"
 import { Router } from "expo-router"
+import { NOTIFICATION_ACTIONS } from "@/lib/notifications"
 import { setIncomingCallState } from "@/lib/calls/callState"
 import { IncomingCall } from "@/types/call"
 
@@ -31,6 +32,12 @@ export function routeNotificationResponse(router: Router, response: Notification
   if (kind === "incoming_call") {
     const callSessionId = asString(data.callSessionId)
     const fromUserId = asString(data.fromUserId) || asString(data.callerUserId)
+    const action =
+      response.actionIdentifier === NOTIFICATION_ACTIONS.acceptCall
+        ? "accept"
+        : response.actionIdentifier === NOTIFICATION_ACTIONS.rejectCall
+          ? "reject"
+          : "open"
 
     if (callSessionId && fromUserId) {
       const call: IncomingCall = {
@@ -39,7 +46,7 @@ export function routeNotificationResponse(router: Router, response: Notification
         fromUserId,
         callType: data.callType === "video" ? "video" : "audio",
       }
-      setIncomingCallState(call)
+      setIncomingCallState(call, action)
     }
   }
 
