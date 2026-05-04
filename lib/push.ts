@@ -116,6 +116,7 @@ export async function sendMessagePush(args: {
 
 export async function sendCallPush(args: {
   targetUserId: string
+  callerUserId: string
   conversationId: string
   callerName: string
   callType: "audio" | "video"
@@ -130,6 +131,8 @@ export async function sendCallPush(args: {
     data: {
       kind: "incoming_call",
       conversationId: args.conversationId,
+      callerUserId: args.callerUserId,
+      fromUserId: args.callerUserId,
       callType: args.callType,
       callSessionId: args.callSessionId ?? null,
     },
