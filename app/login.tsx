@@ -1,6 +1,6 @@
 import { useState } from "react"
-import { Text, View, Image, StyleSheet } from "react-native"
-import { Link, useRouter } from "expo-router"
+import { Text, View, Image, StyleSheet, Pressable } from "react-native"
+import { useRouter } from "expo-router"
 import { AppShell } from "@/components/ui/AppShell"
 import { AppInput } from "@/components/ui/AppInput"
 import { AppButton } from "@/components/ui/AppButton"
@@ -12,6 +12,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
   const [message, setMessage] = useState("")
 
   async function handleLogin() {
@@ -33,6 +34,30 @@ export default function LoginScreen() {
     router.replace("/inbox")
   }
 
+  async function handleForgotPassword() {
+    const cleanEmail = email.trim()
+    setMessage("")
+
+    if (!cleanEmail) {
+      setMessage("Scrie adresa de email, apoi apasă din nou pe «Ai uitat parola?». ")
+      return
+    }
+
+    try {
+      setResetLoading(true)
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail)
+
+      if (error) {
+        setMessage(error.message)
+        return
+      }
+
+      setMessage("Ți-am trimis un email pentru resetarea parolei. Verifică Inbox / Spam.")
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
   return (
     <AppShell>
       <View style={styles.centerWrap}>
@@ -47,9 +72,11 @@ export default function LoginScreen() {
             <AppInput label="Email" placeholder="nume@email.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
             <AppInput label="Parolă" placeholder="Parola ta" value={password} onChangeText={setPassword} secureTextEntry />
 
-            <Text style={styles.forgot}>Ai uitat parola?</Text>
+            <Pressable disabled={resetLoading} onPress={handleForgotPassword} hitSlop={10} style={({ pressed }) => [styles.forgotButton, pressed && styles.forgotPressed]}>
+              <Text style={styles.forgot}>{resetLoading ? "Se trimite..." : "Ai uitat parola?"}</Text>
+            </Pressable>
 
-            {message ? <Text style={styles.message}>{message}</Text> : null}
+            {message ? <Text style={[styles.message, message.includes("trimis") ? styles.successMessage : null]}>{message}</Text> : null}
 
             <AppButton title="Login" onPress={handleLogin} loading={loading} />
             <AppButton title="Creează cont" onPress={() => router.push("/signup")} variant="outline" />
@@ -98,13 +125,25 @@ const styles = StyleSheet.create({
     gap: 14,
     marginTop: 22,
   },
+  forgotButton: {
+    alignSelf: "flex-end",
+    paddingVertical: 4,
+  },
+  forgotPressed: {
+    opacity: 0.65,
+  },
   forgot: {
     textAlign: "right",
     color: theme.colors.darkSoft,
     textDecorationLine: "underline",
+    fontWeight: "700",
   },
   message: {
     color: "#b91c1c",
     fontSize: 14,
+  },
+  successMessage: {
+    color: "#047857",
+    fontWeight: "700",
   },
 })
