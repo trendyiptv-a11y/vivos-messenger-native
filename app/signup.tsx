@@ -9,7 +9,7 @@ import { PasswordInput } from "@/components/ui/PasswordInput"
 import { supabase } from "@/lib/supabase"
 import { theme } from "@/lib/theme"
 
-const VIVOS_MANIFEST_URL = "https://vivos-land.vercel.app/manifest"
+const VIVOS_MANIFEST_URL = "https://vivos-land.vercel.app/downloads/manifest.html"
 
 export default function SignupScreen() {
   const router = useRouter()
