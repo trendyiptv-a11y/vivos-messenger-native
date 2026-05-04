@@ -2,25 +2,6 @@ name: EAS Android Preview APK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "app/**"
-      - "components/**"
-      - "hooks/**"
-      - "lib/**"
-      - "types/**"
-      - "assets/**"
-      - "app.json"
-      - "eas.json"
-      - "package.json"
-      - "package-lock.json"
-      - "yarn.lock"
-      - "babel.config.js"
-      - "tsconfig.json"
-      - "index.js"
-      - ".github/workflows/eas-android-preview.yml"
 
 jobs:
   build-android-preview:
