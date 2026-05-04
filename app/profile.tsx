@@ -9,7 +9,7 @@ import { AppInput } from "@/components/ui/AppInput"
 import { AppButton } from "@/components/ui/AppButton"
 import { BottomTabBar } from "@/components/ui/BottomTabBar"
 import { supabase } from "@/lib/supabase"
-import { registerPushToken, requestNotificationPermissions, showLocalIncomingCallNotification, showLocalMessageNotification } from "@/lib/notifications"
+import { registerPushTokenDetailed, showLocalIncomingCallNotification, showLocalMessageNotification } from "@/lib/notifications"
 import { sendVivosPush } from "@/lib/push"
 import { gradientTextSeed, theme } from "@/lib/theme"
 
@@ -57,7 +57,7 @@ export default function ProfileScreen() {
         .maybeSingle()
 
       if (error) {
-        setPushStatus(`Eroare token: ${error.message}`)
+        setPushStatus(`Eroare citire token: ${error.message}`)
         return
       }
 
@@ -73,7 +73,7 @@ export default function ProfileScreen() {
       setLastTokenUpdate(tokenRow.updated_at ? new Date(tokenRow.updated_at).toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—")
       setPushStatus("Token salvat în Supabase")
     } catch (error) {
-      setPushStatus("Diagnostic push eșuat")
+      setPushStatus(`Diagnostic push eșuat: ${error instanceof Error ? error.message : String(error)}`)
       console.warn("refreshPushDiagnostics failed", error)
     }
   }
@@ -139,14 +139,14 @@ export default function ProfileScreen() {
   async function handleRegisterPushToken() {
     if (!userId) return
     setPushBusy(true)
-    setPushStatus("Cer permisiune și salvez tokenul...")
+    setPushStatus("Cer permisiune, obțin token și îl salvez...")
     try {
-      await requestNotificationPermissions()
-      const token = await registerPushToken(userId)
-      if (token) {
-        setPushStatus("Token push salvat")
+      const result = await registerPushTokenDetailed(userId)
+      if (result.ok && result.token) {
+        setPushTokenPreview(`${result.token.slice(0, 18)}...${result.token.slice(-8)}`)
+        setPushStatus(`Token salvat. Project: ${result.projectId?.slice(0, 8) ?? "—"}`)
       } else {
-        setPushStatus("Nu s-a putut obține tokenul push")
+        setPushStatus(`Eroare ${result.stage}: ${result.error || "necunoscut"}`)
       }
       await refreshPushDiagnostics(userId)
     } finally {
@@ -188,7 +188,7 @@ export default function ProfileScreen() {
         body: "Endpoint-ul /api/push răspunde și trimite către acest telefon.",
         data: { kind: "diagnostic" },
       })
-      setPushStatus(result.ok ? "Endpoint /api/push OK" : "Endpoint /api/push a returnat eroare")
+      setPushStatus(result.ok ? "Endpoint /api/push OK" : `Endpoint /api/push eroare: ${JSON.stringify(result).slice(0, 120)}`)
       await refreshPushDiagnostics(userId)
     } finally {
       setPushBusy(false)
