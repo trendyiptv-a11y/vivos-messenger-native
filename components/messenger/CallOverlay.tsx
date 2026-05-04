@@ -25,7 +25,7 @@ function initials(name: string) {
 
 function statusLabel(callUiState: CallUiState, callType: CallType) {
   if (callUiState === "incoming") return callType === "video" ? "Apel video primit" : "Apel audio primit"
-  if (callUiState === "outgoing") return callType === "video" ? "Se apelează video..." : "Se apelează audio..."
+  if (callUiState === "outgoing") return callType === "video" ? "Se apelează..." : "Se apelează audio..."
   return callType === "video" ? "Apel video conectat" : "Apel audio conectat"
 }
 
@@ -33,6 +33,54 @@ function shortStatus(state: WebRtcManagerState | null, mediaReady: boolean, webr
   const local = state?.localStreamURL ? "local da" : mediaReady ? "media da" : "media nu"
   const remote = state?.remoteStreamURL ? "remote da" : "remote nu"
   return `${webrtcStatus} · ${local} · ${remote}`
+}
+
+type ControlButtonProps = {
+  icon: keyof typeof Ionicons.glyphMap
+  onPress?: () => void
+  danger?: boolean
+  disabled?: boolean
+  large?: boolean
+}
+
+function ControlButton({ icon, onPress, danger = false, disabled = false, large = false }: ControlButtonProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled || !onPress}
+      style={({ pressed }) => [
+        styles.controlButton,
+        large && styles.controlButtonLarge,
+        danger && styles.controlButtonDanger,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Ionicons name={icon} size={large ? 30 : 25} color="white" />
+    </Pressable>
+  )
+}
+
+function CallingPulse() {
+  return (
+    <View style={styles.pulseDots}>
+      <View style={[styles.pulseDot, styles.pulseDotActive]} />
+      <View style={styles.pulseDot} />
+      <View style={styles.pulseDot} />
+    </View>
+  )
+}
+
+function CallSymbol({ callType }: { callType: CallType }) {
+  return (
+    <View style={styles.symbolWrap}>
+      <View style={styles.symbolRingOuter} />
+      <View style={styles.symbolRingMiddle} />
+      <View style={styles.symbolRingInner} />
+      <View style={styles.symbolIconCard}>
+        <Ionicons name={callType === "video" ? "videocam" : "call"} size={42} color="#B5A7FF" />
+      </View>
+    </View>
+  )
 }
 
 export function CallOverlay({
@@ -53,103 +101,83 @@ export function CallOverlay({
   const isVideo = currentCallType === "video"
   const remoteURL = currentWebRtcState?.remoteStreamURL ?? null
   const localURL = currentWebRtcState?.localStreamURL ?? null
-
-  if (isVideo) {
-    return (
-      <View style={styles.videoOverlay}>
-        <View style={styles.videoBackground}>
-          {remoteURL ? (
-            <NativeVideoSurface label="Remote" streamURL={remoteURL} fill />
-          ) : localURL ? (
-            <NativeVideoSurface label="Tu" streamURL={localURL} fill />
-          ) : (
-            <View style={styles.videoWaitingBackground} />
-          )}
-        </View>
-
-        <View style={styles.videoShadeTop} />
-        <View style={styles.videoShadeBottom} />
-
-        <View style={styles.videoHeader}>
-          <View style={styles.videoAvatarCircle}>
-            <Text style={styles.videoAvatarText}>{initials(otherName)}</Text>
-          </View>
-          <View style={styles.videoHeaderText}>
-            <Text numberOfLines={1} style={styles.videoName}>{otherName}</Text>
-            <Text numberOfLines={1} style={styles.videoStatus}>{statusLabel(callUiState, currentCallType)}</Text>
-          </View>
-        </View>
-
-        {localURL && remoteURL ? (
-          <View style={styles.localPreview}>
-            <NativeVideoSurface label="Tu" streamURL={localURL} compact />
-          </View>
-        ) : null}
-
-        {!remoteURL ? (
-          <View style={styles.videoCenterCard}>
-            <View style={styles.callAvatarCircle}>
-              <Text style={styles.callAvatarText}>{initials(otherName)}</Text>
-            </View>
-            <Text style={styles.callName}>{otherName}</Text>
-            <Text style={styles.callStatus}>{statusLabel(callUiState, currentCallType)}</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.videoDebugChip}>
-          <Ionicons name="radio-outline" size={13} color="rgba(255,255,255,0.82)" />
-          <Text numberOfLines={1} style={styles.videoDebugText}>{shortStatus(currentWebRtcState, mediaReady, webrtcStatus)}</Text>
-        </View>
-
-        {callUiState === "incoming" ? (
-          <View style={styles.videoActionsRow}>
-            <Pressable onPress={onReject} disabled={callBusy} style={[styles.videoRoundButton, styles.rejectRound]}>
-              <Ionicons name="call-outline" size={25} color="white" />
-            </Pressable>
-            <Pressable onPress={onAccept} disabled={callBusy} style={[styles.videoRoundButton, styles.acceptRound]}>
-              <Ionicons name="videocam" size={25} color="white" />
-            </Pressable>
-          </View>
-        ) : (
-          <View style={styles.videoActionsRow}>
-            <Pressable onPress={onEnd} disabled={callBusy} style={[styles.videoRoundButton, styles.rejectRound]}>
-              <Ionicons name="call-outline" size={25} color="white" />
-            </Pressable>
-          </View>
-        )}
-      </View>
-    )
-  }
+  const mainVideoURL = remoteURL || (isVideo ? localURL : null)
+  const showPreview = isVideo && Boolean(localURL)
+  const isIncoming = callUiState === "incoming"
+  const isConnected = callUiState === "connected"
 
   return (
-    <View style={styles.callOverlay}>
-      <View style={styles.callCard}>
-        <View style={styles.callAvatarCircle}>
-          <Text style={styles.callAvatarText}>{initials(otherName)}</Text>
-        </View>
-        <Text style={styles.callName}>{otherName}</Text>
-        <Text style={styles.callStatus}>{statusLabel(callUiState, currentCallType)}</Text>
+    <View style={styles.overlay}>
+      <View style={styles.darkBase} />
+      <View style={styles.glowBottom} />
+      <View style={styles.glowCenter} />
 
-        <View style={styles.audioStatusCard}>
-          <Ionicons name="radio-outline" size={16} color={theme.colors.textSoft} />
-          <Text style={styles.audioStatusText}>{shortStatus(currentWebRtcState, mediaReady, webrtcStatus)}</Text>
+      {isVideo && mainVideoURL && remoteURL ? (
+        <View style={styles.fullVideo}>
+          <NativeVideoSurface label="Remote" streamURL={mainVideoURL} fill />
         </View>
+      ) : null}
 
-        {callUiState === "incoming" ? (
-          <View style={styles.callActionsRow}>
-            <Pressable onPress={onReject} disabled={callBusy} style={[styles.roundActionButton, styles.rejectRound]}>
-              <Ionicons name="call-outline" size={24} color="white" />
-            </Pressable>
-            <Pressable onPress={onAccept} disabled={callBusy} style={[styles.roundActionButton, styles.acceptRound]}>
-              <Ionicons name="call" size={24} color="white" />
-            </Pressable>
-          </View>
+      <View style={styles.topShade} />
+      <View style={styles.bottomShade} />
+
+      <View style={styles.topBar}>
+        <Pressable onPress={isIncoming ? onReject : onEnd} disabled={callBusy} style={styles.topRoundButton}>
+          <Ionicons name={isIncoming ? "chevron-down" : "chevron-back"} size={28} color="white" />
+        </Pressable>
+
+        <Pressable style={styles.topRoundButton}>
+          <Ionicons name="mic-off-outline" size={25} color="white" />
+        </Pressable>
+      </View>
+
+      <View style={styles.identityBlock}>
+        <Text numberOfLines={1} style={styles.nameText}>{otherName}</Text>
+        <Text numberOfLines={1} style={styles.statusText}>{statusLabel(callUiState, currentCallType)}</Text>
+        {!isConnected ? <CallingPulse /> : null}
+      </View>
+
+      {showPreview ? (
+        <View style={styles.localPreviewCard}>
+          <NativeVideoSurface label="Tu" streamURL={localURL} compact />
+        </View>
+      ) : null}
+
+      {!remoteURL ? (
+        <View style={styles.centerSymbolArea}>
+          {isVideo && !localURL ? (
+            <View style={styles.avatarFallback}>
+              <Text style={styles.avatarFallbackText}>{initials(otherName)}</Text>
+            </View>
+          ) : (
+            <CallSymbol callType={currentCallType} />
+          )}
+        </View>
+      ) : null}
+
+      <View style={styles.debugPill}>
+        <Ionicons name="radio-outline" size={13} color="rgba(255,255,255,0.70)" />
+        <Text numberOfLines={1} style={styles.debugText}>{shortStatus(currentWebRtcState, mediaReady, webrtcStatus)}</Text>
+      </View>
+
+      <View style={styles.controlDock}>
+        <View style={styles.dockHandle} />
+        {isIncoming ? (
+          <>
+            <ControlButton icon="mic-outline" />
+            <ControlButton icon={isVideo ? "videocam-outline" : "call-outline"} />
+            <ControlButton icon="volume-high-outline" />
+            <ControlButton icon="call-outline" onPress={onReject} danger disabled={callBusy} large />
+            <ControlButton icon={isVideo ? "videocam" : "call"} onPress={onAccept} disabled={callBusy} large />
+          </>
         ) : (
-          <View style={styles.callActionsRow}>
-            <Pressable onPress={onEnd} disabled={callBusy} style={[styles.roundActionButton, styles.rejectRound]}>
-              <Ionicons name="call-outline" size={24} color="white" />
-            </Pressable>
-          </View>
+          <>
+            <ControlButton icon="mic-outline" />
+            <ControlButton icon="videocam-outline" />
+            <ControlButton icon="camera-reverse-outline" />
+            <ControlButton icon="volume-high-outline" />
+            <ControlButton icon="call-outline" onPress={onEnd} danger disabled={callBusy} large />
+          </>
         )}
       </View>
     </View>
@@ -157,217 +185,266 @@ export function CallOverlay({
 }
 
 const styles = StyleSheet.create({
-  callOverlay: {
+  overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(2,6,23,0.72)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 18,
+    backgroundColor: "#02030A",
     zIndex: 50,
     elevation: 50,
+    overflow: "hidden",
   },
-  callCard: {
-    width: "100%",
-    borderRadius: 32,
-    padding: 22,
-    backgroundColor: "rgba(18,46,84,0.98)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    alignItems: "center",
-  },
-  videoOverlay: {
+  darkBase: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#020617",
-    zIndex: 50,
-    elevation: 50,
+    backgroundColor: "#02030A",
   },
-  videoBackground: {
+  fullVideo: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#020617",
+    backgroundColor: "black",
   },
-  videoWaitingBackground: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#0F2D52",
-  },
-  videoShadeTop: {
+  topShade: {
     position: "absolute",
+    top: 0,
     left: 0,
     right: 0,
-    top: 0,
-    height: 160,
-    backgroundColor: "rgba(2,6,23,0.50)",
+    height: 220,
+    backgroundColor: "rgba(0,0,0,0.42)",
   },
-  videoShadeBottom: {
+  bottomShade: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    height: 230,
-    backgroundColor: "rgba(2,6,23,0.58)",
+    height: 260,
+    backgroundColor: "rgba(0,0,0,0.56)",
   },
-  videoHeader: {
+  glowBottom: {
     position: "absolute",
-    top: 46,
+    left: -80,
+    right: -80,
+    bottom: 0,
+    height: 260,
+    backgroundColor: "rgba(77,76,210,0.24)",
+    borderTopLeftRadius: 240,
+    borderTopRightRadius: 240,
+  },
+  glowCenter: {
+    position: "absolute",
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    left: "50%",
+    top: "42%",
+    marginLeft: -150,
+    marginTop: -150,
+    backgroundColor: "rgba(123,92,255,0.06)",
+  },
+  topBar: {
+    position: "absolute",
+    top: 48,
     left: 22,
     right: 22,
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: 12,
   },
-  videoAvatarCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  topRoundButton: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(154,113,193,0.75)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+  identityBlock: {
+    position: "absolute",
+    top: 126,
+    left: 26,
+    right: 172,
+  },
+  nameText: {
+    color: "white",
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: "900",
+    letterSpacing: -0.7,
+  },
+  statusText: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 18,
+    marginTop: 10,
+    fontWeight: "600",
+  },
+  pulseDots: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 18,
+    alignItems: "center",
+  },
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(171,153,255,0.65)",
+  },
+  pulseDotActive: {
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: "#9B7CFF",
+  },
+  localPreviewCard: {
+    position: "absolute",
+    right: 24,
+    top: 138,
+    width: 130,
+    height: 176,
+    borderRadius: 24,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.26)",
+    shadowColor: "#8C78FF",
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+  centerSymbolArea: {
+    position: "absolute",
+    top: "37%",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  symbolWrap: {
+    width: 260,
+    height: 260,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  symbolRingOuter: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    borderWidth: 1,
+    borderColor: "rgba(151,127,255,0.10)",
+  },
+  symbolRingMiddle: {
+    position: "absolute",
+    width: 208,
+    height: 208,
+    borderRadius: 104,
+    borderWidth: 1.5,
+    borderColor: "rgba(151,127,255,0.20)",
+  },
+  symbolRingInner: {
+    position: "absolute",
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    borderWidth: 1.5,
+    borderColor: "rgba(151,127,255,0.32)",
+  },
+  symbolIconCard: {
+    width: 92,
+    height: 76,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(40,38,92,0.88)",
+    borderWidth: 1,
+    borderColor: "rgba(159,132,255,0.52)",
+  },
+  avatarFallback: {
+    width: 118,
+    height: 118,
+    borderRadius: 59,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(154,113,193,0.78)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.20)",
   },
-  videoAvatarText: {
+  avatarFallbackText: {
     color: "white",
-    fontSize: 18,
+    fontSize: 38,
     fontWeight: "900",
   },
-  videoHeaderText: {
-    flex: 1,
-  },
-  videoName: {
-    color: "white",
-    fontSize: 21,
-    fontWeight: "900",
-  },
-  videoStatus: {
-    color: "rgba(255,255,255,0.72)",
-    fontSize: 14,
-    marginTop: 3,
-    fontWeight: "600",
-  },
-  videoCenterCard: {
+  debugPill: {
     position: "absolute",
-    left: 28,
-    right: 28,
-    top: "31%",
-    alignItems: "center",
-    borderRadius: 30,
-    padding: 22,
-    backgroundColor: "rgba(18,46,84,0.72)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-  },
-  localPreview: {
-    position: "absolute",
-    right: 20,
-    top: 112,
-    width: 108,
-    height: 148,
-    borderRadius: 18,
-    overflow: "hidden",
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.55)",
-    backgroundColor: "black",
-  },
-  videoDebugChip: {
-    position: "absolute",
-    left: 20,
-    right: 20,
-    bottom: 110,
-    minHeight: 34,
-    borderRadius: 17,
+    left: 24,
+    right: 24,
+    bottom: 142,
+    minHeight: 32,
+    borderRadius: 16,
     paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(2,6,23,0.48)",
+    backgroundColor: "rgba(255,255,255,0.055)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    borderColor: "rgba(255,255,255,0.08)",
   },
-  videoDebugText: {
+  debugText: {
     flex: 1,
-    color: "rgba(255,255,255,0.78)",
-    fontSize: 12,
+    color: "rgba(255,255,255,0.56)",
+    fontSize: 11,
     fontWeight: "600",
   },
-  videoActionsRow: {
+  controlDock: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 34,
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 28,
-  },
-  videoRoundButton: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 8,
-  },
-  callAvatarCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(154,113,193,0.75)",
-  },
-  callAvatarText: {
-    color: "white",
-    fontSize: 32,
-    fontWeight: "900",
-  },
-  callName: {
-    color: theme.colors.text,
-    fontSize: 25,
-    fontWeight: "900",
-    marginTop: 18,
-    textAlign: "center",
-  },
-  callStatus: {
-    color: theme.colors.textSoft,
-    fontSize: 16,
-    marginTop: 9,
-    textAlign: "center",
-  },
-  audioStatusCard: {
-    marginTop: 22,
-    width: "100%",
-    borderRadius: 22,
-    padding: 14,
+    left: 14,
+    right: 14,
+    bottom: 28,
+    minHeight: 108,
+    borderRadius: 38,
+    paddingHorizontal: 16,
+    paddingTop: 26,
+    paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(8,9,18,0.86)",
     borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    shadowColor: "#7F70FF",
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
+    elevation: 16,
+  },
+  dockHandle: {
+    position: "absolute",
+    top: 10,
+    left: "50%",
+    width: 48,
+    height: 5,
+    marginLeft: -24,
+    borderRadius: 999,
+    backgroundColor: "rgba(151,127,255,0.68)",
+  },
+  controlButton: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.085)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  controlButtonLarge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+  },
+  controlButtonDanger: {
+    backgroundColor: "#F04444",
     borderColor: "rgba(255,255,255,0.10)",
   },
-  audioStatusText: {
-    flex: 1,
-    color: theme.colors.textSoft,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  callActionsRow: {
-    flexDirection: "row",
-    gap: 24,
-    marginTop: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  roundActionButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 8,
-  },
-  acceptRound: {
-    backgroundColor: "#0F9D58",
-  },
-  rejectRound: {
-    backgroundColor: "#D93025",
+  pressed: {
+    opacity: 0.76,
+    transform: [{ scale: 0.98 }],
   },
 })
