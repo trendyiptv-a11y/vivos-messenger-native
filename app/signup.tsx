@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { Pressable, Text, View, Image, StyleSheet } from "react-native"
+import { Linking, Pressable, Text, View, Image, StyleSheet } from "react-native"
 import { useRouter } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 import { AppShell } from "@/components/ui/AppShell"
@@ -8,6 +8,8 @@ import { AppButton } from "@/components/ui/AppButton"
 import { PasswordInput } from "@/components/ui/PasswordInput"
 import { supabase } from "@/lib/supabase"
 import { theme } from "@/lib/theme"
+
+const VIVOS_MANIFEST_URL = "https://vivos-land.vercel.app/manifest"
 
 export default function SignupScreen() {
   const router = useRouter()
@@ -42,7 +44,7 @@ export default function SignupScreen() {
       return
     }
     if (!acceptedTerms) {
-      setMessage("Trebuie să accepți condițiile VIVOS pentru a crea contul.")
+      setMessage("Trebuie să accepți regulile comunității VIVOS pentru a crea contul.")
       return
     }
 
@@ -62,6 +64,10 @@ export default function SignupScreen() {
 
     setMessage("Cont creat. Verifică emailul pentru confirmare, apoi intră în Messenger.")
     setLoading(false)
+  }
+
+  async function openVivosManifest() {
+    await Linking.openURL(VIVOS_MANIFEST_URL)
   }
 
   return (
@@ -100,8 +106,13 @@ export default function SignupScreen() {
                 {acceptedTerms ? <Ionicons name="checkmark" size={18} color="white" /> : null}
               </View>
               <View style={styles.checkTextWrap}>
-                <Text style={styles.checkTitle}>Accept condițiile VIVOS</Text>
-                <Text style={styles.checkSubtitle}>Folosesc Messenger cu respect față de ceilalți membri.</Text>
+                <View style={styles.rulesTitleRow}>
+                  <Text style={styles.checkTitle}>Accept regulile comunității </Text>
+                  <Pressable onPress={openVivosManifest} hitSlop={8}>
+                    <Text style={styles.vivosLink}>VIVOS</Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.checkSubtitle}>Apasă pe VIVOS pentru a citi manifestul comunității.</Text>
               </View>
             </Pressable>
 
@@ -208,10 +219,21 @@ const styles = StyleSheet.create({
   checkTextWrap: {
     flex: 1,
   },
+  rulesTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
   checkTitle: {
     color: theme.colors.darkText,
     fontSize: 14,
     fontWeight: "800",
+  },
+  vivosLink: {
+    color: "#7C3AED",
+    fontSize: 14,
+    fontWeight: "900",
+    textDecorationLine: "underline",
   },
   checkSubtitle: {
     color: theme.colors.darkSoft,
