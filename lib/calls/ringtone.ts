@@ -1,58 +1,34 @@
-import { Platform, Vibration } from "react-native"
-import { Audio } from "expo-av"
+import { Vibration } from "react-native"
+import { showLocalIncomingCallNotification } from "@/lib/notifications"
 
-let ringtoneSound: Audio.Sound | null = null
-let vibrationActive = false
+let feedbackActive = false
+let reminderTimer: ReturnType<typeof setInterval> | null = null
 
 const VIBRATION_PATTERN = [0, 900, 400, 900, 400, 900]
 
-export async function startIncomingCallFeedback() {
+export async function startIncomingCallFeedback(callerName = "VIVOS", callType: "audio" | "video" = "audio") {
+  if (feedbackActive) return
+  feedbackActive = true
+
   try {
-    vibrationActive = true
     Vibration.vibrate(VIBRATION_PATTERN, true)
+    await showLocalIncomingCallNotification(callerName, callType)
 
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      shouldDuckAndroid: false,
-      playThroughEarpieceAndroid: false,
-      staysActiveInBackground: true,
-    })
-
-    if (!ringtoneSound) {
-      const { sound } = await Audio.Sound.createAsync(
-        require("@/assets/sounds/vivos-ring.mp3"),
-        {
-          shouldPlay: true,
-          isLooping: true,
-          volume: 1,
-        }
-      )
-      ringtoneSound = sound
-      return
-    }
-
-    await ringtoneSound.setIsLoopingAsync(true)
-    await ringtoneSound.setVolumeAsync(1)
-    await ringtoneSound.playAsync()
+    reminderTimer = setInterval(() => {
+      if (!feedbackActive) return
+      Vibration.vibrate(VIBRATION_PATTERN, false)
+    }, 7000)
   } catch (error) {
     console.warn("Incoming call feedback failed", error)
-    if (Platform.OS === "android" && !vibrationActive) {
-      Vibration.vibrate(VIBRATION_PATTERN, true)
-    }
   }
 }
 
 export async function stopIncomingCallFeedback() {
-  vibrationActive = false
+  feedbackActive = false
   Vibration.cancel()
 
-  try {
-    await ringtoneSound?.stopAsync()
-    await ringtoneSound?.unloadAsync()
-  } catch (error) {
-    console.warn("Incoming call feedback stop failed", error)
-  } finally {
-    ringtoneSound = null
+  if (reminderTimer) {
+    clearInterval(reminderTimer)
+    reminderTimer = null
   }
 }
