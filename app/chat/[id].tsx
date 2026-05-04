@@ -113,6 +113,10 @@ export default function ChatScreenIntegrated() {
 
   function handleBackToInbox() {
     setMenuOpen(false)
+    if (router.canGoBack()) {
+      router.back()
+      return
+    }
     router.replace("/inbox")
   }
 
@@ -138,6 +142,7 @@ export default function ChatScreenIntegrated() {
             setMenuOpen={setMenuOpen}
             onStartCall={handleStartCall}
             onLogout={handleLogout}
+            onOpenMessages={handleBackToInbox}
           />
         }
       />
