@@ -10,7 +10,7 @@ import { AppButton } from "@/components/ui/AppButton"
 import { BottomTabBar } from "@/components/ui/BottomTabBar"
 import { supabase } from "@/lib/supabase"
 import { registerPushTokenDetailed, showLocalIncomingCallNotification, showLocalMessageNotification } from "@/lib/notifications"
-import { sendVivosPush } from "@/lib/push"
+import { sendSelfPushDiagnostic } from "@/lib/push"
 import { gradientTextSeed, theme } from "@/lib/theme"
 
 type ProfileRow = {
@@ -184,18 +184,11 @@ export default function ProfileScreen() {
   }
 
   async function handleRemotePushTest() {
-    if (!userId) return
     setPushBusy(true)
-    setPushStatus("Testez endpoint-ul /api/push...")
+    setPushStatus("Trimit push real către acest telefon...")
     try {
-      const result = await sendVivosPush({
-        targetUserId: userId,
-        type: "system",
-        title: "Test VIVOS",
-        body: "Endpoint-ul /api/push răspunde și trimite către acest telefon.",
-        data: { kind: "diagnostic" },
-      })
-      setPushStatus(result.ok ? "Endpoint /api/push OK" : `Endpoint /api/push eroare: ${JSON.stringify(result).slice(0, 120)}`)
+      const result = await sendSelfPushDiagnostic()
+      setPushStatus(result.ok ? "Push server OK: notificare trimisă către acest telefon" : `Push server eroare: ${JSON.stringify(result).slice(0, 140)}`)
       await refreshPushDiagnostics(userId, { silentWhenMissing: !result.ok })
     } finally {
       setPushBusy(false)
