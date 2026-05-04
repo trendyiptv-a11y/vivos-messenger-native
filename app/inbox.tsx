@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { useRouter } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
@@ -26,6 +26,8 @@ type ConvCard = {
 
 export default function InboxScreen() {
   const router = useRouter()
+  const mountedRef = useRef(true)
+  const loadBusyRef = useRef(false)
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
@@ -35,11 +37,24 @@ export default function InboxScreen() {
   const [unreadByConv, setUnreadByConv] = useState<Record<string, number>>({})
 
   useEffect(() => {
-    async function load() {
-      setLoading(true)
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  const load = useCallback(async () => {
+    if (loadBusyRef.current) return
+    loadBusyRef.current = true
+
+    try {
+      if (mountedRef.current) setLoading(true)
+
       const {
         data: { session },
       } = await supabase.auth.getSession()
+
+      if (!mountedRef.current) return
 
       if (!session?.user) {
         router.replace("/login")
@@ -48,14 +63,25 @@ export default function InboxScreen() {
 
       setUserId(session.user.id)
 
-      const { data: convData } = await supabase
+      const { data: convData, error: convError } = await supabase
         .from("conversations")
         .select("id, created_at")
         .order("created_at", { ascending: false })
         .limit(30)
 
+      if (convError) throw convError
+      if (!mountedRef.current) return
+
       const convs = (convData ?? []) as ConversationRow[]
-      const ids = convs.map((c) => c.id)
+      const ids = convs.map((c) => c.id).filter(Boolean)
+
+      if (!ids.length) {
+        setConversations([])
+        setMembers([])
+        setMessages([])
+        setUnreadByConv({})
+        return
+      }
 
       const memberGroups = await Promise.all(
         ids.map(async (cid) => {
@@ -74,6 +100,8 @@ export default function InboxScreen() {
         })
       )
 
+      if (!mountedRef.current) return
+
       const [{ data: msgData }, { data: unreadNotifications }] = await Promise.all([
         supabase
           .from("messages")
@@ -88,6 +116,8 @@ export default function InboxScreen() {
           .eq("user_id", session.user.id),
       ])
 
+      if (!mountedRef.current) return
+
       const unreadMessageIds = ((unreadNotifications ?? []) as NotificationRefRow[])
         .map((item) => item.ref_id)
         .filter((value): value is string => !!value)
@@ -98,6 +128,8 @@ export default function InboxScreen() {
           .from("messages")
           .select("id, conversation_id")
           .in("id", unreadMessageIds)
+
+        if (!mountedRef.current) return
 
         ;((unreadMessages ?? []) as any[]).forEach((row) => {
           const cid = String(row.conversation_id || "")
@@ -110,21 +142,35 @@ export default function InboxScreen() {
       setMembers(memberGroups)
       setMessages((msgData ?? []) as MessageRow[])
       setUnreadByConv(unreadMap)
-      setLoading(false)
+    } catch (error) {
+      console.warn("Inbox load failed", error)
+    } finally {
+      loadBusyRef.current = false
+      if (mountedRef.current) setLoading(false)
     }
+  }, [router])
 
+  useEffect(() => {
+    let active = true
     load()
 
     const channel = supabase
       .channel("native-inbox-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
+        if (active && mountedRef.current) load()
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => {
+        if (active && mountedRef.current) load()
+      })
       .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      active = false
+      supabase.removeChannel(channel).catch((error) => {
+        console.warn("inbox channel cleanup failed", error)
+      })
     }
-  }, [router])
+  }, [load])
 
   const cards = useMemo<ConvCard[]>(() => {
     return conversations
@@ -157,6 +203,10 @@ export default function InboxScreen() {
 
   const totalUnread = useMemo(() => Object.values(unreadByConv).reduce((sum, value) => sum + value, 0), [unreadByConv])
 
+  function openChat(conversationId: string) {
+    router.push(`/chat/${conversationId}`)
+  }
+
   return (
     <AppShell padded={false}>
       <ScreenHeader eyebrow="VIVOS" title="Messenger" />
@@ -165,7 +215,7 @@ export default function InboxScreen() {
           <Text style={styles.eyebrow}>Mesaje private</Text>
           <Text style={styles.heroTitle}>Spațiu direct de legătură</Text>
           <Text style={styles.heroBody}>Mesaje clare, apeluri rapide și contact uman fără zgomot inutil.</Text>
-          <AppButton title="Deschide apeluri" onPress={() => router.push("/calls")} leftIcon={<Ionicons name="call-outline" size={18} color="white" />} />
+          <AppButton title="Deschide apeluri" onPress={() => router.replace("/calls")} leftIcon={<Ionicons name="call-outline" size={18} color="white" />} />
 
           <View style={styles.statsRow}>
             <View style={styles.statCard}><Text style={styles.statLabel}>Conversații</Text><Text style={styles.statValue}>{cards.length}</Text></View>
@@ -185,7 +235,7 @@ export default function InboxScreen() {
           <Text style={styles.helper}>Nicio conversație încă.</Text>
         ) : (
           filtered.map((card) => (
-            <Pressable key={card.id} onPress={() => router.push(`/chat/${card.id}`)} style={[styles.convCard, card.unreadCount > 0 && styles.convCardUnread]}>
+            <Pressable key={card.id} onPress={() => openChat(card.id)} style={[styles.convCard, card.unreadCount > 0 && styles.convCardUnread]}>
               <View style={styles.avatarCircle}>
                 <Text style={styles.avatarText}>{gradientTextSeed(card.email || card.name)}</Text>
               </View>
