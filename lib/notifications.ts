@@ -9,6 +9,15 @@ export const NOTIFICATION_CHANNELS = {
   calls: "vivos-calls",
 }
 
+export const NOTIFICATION_CATEGORIES = {
+  incomingCall: "vivos-incoming-call",
+}
+
+export const NOTIFICATION_ACTIONS = {
+  acceptCall: "vivos-accept-call",
+  rejectCall: "vivos-reject-call",
+}
+
 type PushRegistrationResult = {
   ok: boolean
   token: string | null
@@ -26,6 +35,26 @@ Notifications.setNotificationHandler({
     shouldSetBadge: true,
   }),
 })
+
+export async function configureNotificationCategories() {
+  await Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.incomingCall, [
+    {
+      identifier: NOTIFICATION_ACTIONS.acceptCall,
+      buttonTitle: "Acceptă",
+      options: {
+        opensAppToForeground: true,
+      },
+    },
+    {
+      identifier: NOTIFICATION_ACTIONS.rejectCall,
+      buttonTitle: "Respinge",
+      options: {
+        opensAppToForeground: true,
+        isDestructive: true,
+      },
+    },
+  ])
+}
 
 export async function configureAndroidNotificationChannels() {
   if (Platform.OS !== "android") return
@@ -48,8 +77,13 @@ export async function configureAndroidNotificationChannels() {
   })
 }
 
-export async function requestNotificationPermissions() {
+export async function configureNativeNotifications() {
   await configureAndroidNotificationChannels()
+  await configureNotificationCategories()
+}
+
+export async function requestNotificationPermissions() {
+  await configureNativeNotifications()
 
   const settings = await Notifications.getPermissionsAsync()
   if (settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) {
@@ -206,6 +240,7 @@ export async function showLocalIncomingCallNotification(callerName: string, call
       sound: "default",
       priority: Notifications.AndroidNotificationPriority.MAX,
       badge: 1,
+      categoryIdentifier: NOTIFICATION_CATEGORIES.incomingCall,
       data: { kind: "incoming_call", callType },
     },
     trigger: Platform.OS === "android" ? { channelId: NOTIFICATION_CHANNELS.calls, seconds: 1 } : { seconds: 1 },
