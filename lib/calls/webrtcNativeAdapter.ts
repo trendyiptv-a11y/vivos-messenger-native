@@ -19,6 +19,9 @@ export type NativeWebRtcSession = NativeStreamViewState & {
   callType: CallType
   diagnostics: string[]
   iceServers: IceServerConfig[]
+  microphoneEnabled: boolean
+  cameraEnabled: boolean
+  speakerEnabled: boolean
 }
 
 let currentNativeSession: NativeWebRtcSession | null = null
@@ -147,6 +150,9 @@ export async function createNativeWebRtcSession(callType: CallType, iceServers: 
     connectionState: "new",
     diagnostics: [],
     iceServers,
+    microphoneEnabled: true,
+    cameraEnabled: callType === "video",
+    speakerEnabled: callType === "video",
   }
 
   internals = {
@@ -198,6 +204,12 @@ export async function prepareNativeLocalStream() {
   })
 
   internals.localStream = localStream
+  localStream.getAudioTracks?.().forEach((track: any) => {
+    track.enabled = currentNativeSession?.microphoneEnabled ?? true
+  })
+  localStream.getVideoTracks?.().forEach((track: any) => {
+    track.enabled = currentNativeSession?.cameraEnabled ?? true
+  })
   localStream.getTracks().forEach((track) => pc.addTrack(track, localStream))
   syncStreamURLs()
   pushDiagnostic("Local stream nativ pregătit")
@@ -209,6 +221,42 @@ export async function markNativeRemoteStreamReady() {
     syncStreamURLs()
     pushDiagnostic("Remote stream marcat ca pregătit")
   }
+}
+
+export function setNativeMicrophoneEnabled(enabled: boolean) {
+  if (currentNativeSession) currentNativeSession.microphoneEnabled = enabled
+  internals.localStream?.getAudioTracks?.().forEach((track: any) => {
+    track.enabled = enabled
+  })
+  pushDiagnostic(enabled ? "Microfon activ" : "Microfon dezactivat")
+  return enabled
+}
+
+export function setNativeCameraEnabled(enabled: boolean) {
+  if (currentNativeSession) currentNativeSession.cameraEnabled = enabled
+  internals.localStream?.getVideoTracks?.().forEach((track: any) => {
+    track.enabled = enabled
+  })
+  pushDiagnostic(enabled ? "Camera activă" : "Camera dezactivată")
+  return enabled
+}
+
+export async function switchNativeCamera() {
+  const videoTrack = internals.localStream?.getVideoTracks?.()[0] as any
+  if (videoTrack && typeof videoTrack._switchCamera === "function") {
+    await videoTrack._switchCamera()
+    pushDiagnostic("Camera schimbată")
+    return true
+  }
+
+  pushDiagnostic("Schimbarea camerei indisponibilă")
+  return false
+}
+
+export function setNativeSpeakerEnabled(enabled: boolean) {
+  if (currentNativeSession) currentNativeSession.speakerEnabled = enabled
+  pushDiagnostic(enabled ? "Speaker activ" : "Speaker dezactivat")
+  return enabled
 }
 
 export async function createNativeOffer(): Promise<SessionDescriptionLike> {
