@@ -48,7 +48,7 @@ export default function ChatScreenIntegrated() {
     webrtcStatus,
     mediaReady,
     startMedia,
-    setIncomingCall,
+    receiveIncomingCall,
     setCurrentCallSessionId,
     setCurrentCallType,
     setCallUiState,
@@ -71,7 +71,10 @@ export default function ChatScreenIntegrated() {
     currentCallSessionId,
     callChannelRef,
     startMedia,
-    setIncomingCall,
+    setIncomingCall: async (call) => {
+      if (!call) return
+      await receiveIncomingCall(call, otherName)
+    },
     setCurrentCallType,
     setCallUiState,
     setWebrtcStatus,
@@ -80,13 +83,9 @@ export default function ChatScreenIntegrated() {
 
   useIncomingCallChannel({
     userId,
-    onIncomingCall: (call) => {
+    onIncomingCall: async (call) => {
       if (call.conversationId !== conversationId) return
-      setIncomingCall(call)
-      setCurrentCallSessionId(call.callSessionId)
-      setCurrentCallType(call.callType)
-      setWebrtcStatus("În așteptare")
-      setCallUiState("incoming")
+      await receiveIncomingCall(call, otherName)
     },
     onCallEnded: async (callSessionId) => {
       if (currentCallSessionId && callSessionId !== currentCallSessionId) return
