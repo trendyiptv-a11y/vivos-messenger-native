@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
+import { useState } from "react"
 import { Session } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
+import { registerPushToken } from "@/lib/notifications"
 
 export function useAuthSession() {
   const [session, setSession] = useState<Session | null>(null)
@@ -13,6 +15,10 @@ export function useAuthSession() {
       if (!mounted) return
       setSession(data.session ?? null)
       setLoading(false)
+
+      if (data.session?.user?.id) {
+        registerPushToken(data.session.user.id)
+      }
     })
 
     const {
@@ -20,6 +26,10 @@ export function useAuthSession() {
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession)
       setLoading(false)
+
+      if (nextSession?.user?.id) {
+        registerPushToken(nextSession.user.id)
+      }
     })
 
     return () => {
