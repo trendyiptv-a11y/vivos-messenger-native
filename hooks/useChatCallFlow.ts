@@ -9,6 +9,7 @@ import {
   rejectCallSession,
 } from "@/lib/calls/signaling"
 import { closeWebRtcManager, createWebRtcManager, prepareWebRtcLocalStream } from "@/lib/calls/webrtc"
+import { startIncomingCallFeedback, stopIncomingCallFeedback } from "@/lib/calls/ringtone"
 import { useCallMedia } from "@/hooks/useCallMedia"
 
 type Args = {
@@ -29,6 +30,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
   const { mediaReady, startMedia, stopMedia } = useCallMedia()
 
   const resetCallFlow = useCallback(async (status = "Închis") => {
+    await stopIncomingCallFeedback()
     await stopMedia()
     await closeWebRtcManager()
     setIncomingCall(null)
@@ -36,6 +38,15 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
     setCallUiState("idle")
     setWebrtcStatus(status)
   }, [stopMedia])
+
+  const receiveIncomingCall = useCallback(async (call: IncomingCall, callerName = "VIVOS") => {
+    setIncomingCall(call)
+    setCurrentCallSessionId(call.callSessionId)
+    setCurrentCallType(call.callType)
+    setWebrtcStatus("În așteptare")
+    setCallUiState("incoming")
+    await startIncomingCallFeedback(callerName, call.callType)
+  }, [])
 
   const startOutgoingCall = useCallback(async (callType: CallType) => {
     if (!userId || !calleeId || callBusy || callUiState !== "idle") return
@@ -91,6 +102,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
 
     try {
       setCallBusy(true)
+      await stopIncomingCallFeedback()
       await startMedia(incomingCall.callType)
       await createWebRtcManager(incomingCall.callType)
       await prepareWebRtcLocalStream()
@@ -134,6 +146,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
 
     try {
       setCallBusy(true)
+      await stopIncomingCallFeedback()
       await rejectCallSession(incomingCall.callSessionId)
 
       await logCallEvent({
@@ -162,6 +175,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
 
   const stopCurrentCall = useCallback(async () => {
     try {
+      await stopIncomingCallFeedback()
       if (currentCallSessionId) {
         await endCallSession(currentCallSessionId)
 
@@ -203,6 +217,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
     startMedia,
     stopMedia,
     setIncomingCall,
+    receiveIncomingCall,
     setCurrentCallSessionId,
     setCurrentCallType,
     setCallUiState,
