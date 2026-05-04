@@ -26,6 +26,10 @@ type DevicePushTokenRow = {
   updated_at: string | null
 }
 
+type RefreshOptions = {
+  silentWhenMissing?: boolean
+}
+
 export default function ProfileScreen() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -41,7 +45,7 @@ export default function ProfileScreen() {
   const [pushTokenPreview, setPushTokenPreview] = useState("—")
   const [lastTokenUpdate, setLastTokenUpdate] = useState("—")
 
-  async function refreshPushDiagnostics(currentUserId?: string | null) {
+  async function refreshPushDiagnostics(currentUserId?: string | null, options: RefreshOptions = {}) {
     const targetUserId = currentUserId ?? userId
     try {
       const permissions = await Notifications.getPermissionsAsync()
@@ -65,7 +69,9 @@ export default function ProfileScreen() {
       if (!tokenRow?.token) {
         setPushTokenPreview("—")
         setLastTokenUpdate("—")
-        setPushStatus("Tokenul nu este salvat încă")
+        if (!options.silentWhenMissing) {
+          setPushStatus("Tokenul nu este salvat încă")
+        }
         return
       }
 
@@ -145,10 +151,11 @@ export default function ProfileScreen() {
       if (result.ok && result.token) {
         setPushTokenPreview(`${result.token.slice(0, 18)}...${result.token.slice(-8)}`)
         setPushStatus(`Token salvat. Project: ${result.projectId?.slice(0, 8) ?? "—"}`)
+        await refreshPushDiagnostics(userId)
       } else {
         setPushStatus(`Eroare ${result.stage}: ${result.error || "necunoscut"}`)
+        await refreshPushDiagnostics(userId, { silentWhenMissing: true })
       }
-      await refreshPushDiagnostics(userId)
     } finally {
       setPushBusy(false)
     }
@@ -189,7 +196,7 @@ export default function ProfileScreen() {
         data: { kind: "diagnostic" },
       })
       setPushStatus(result.ok ? "Endpoint /api/push OK" : `Endpoint /api/push eroare: ${JSON.stringify(result).slice(0, 120)}`)
-      await refreshPushDiagnostics(userId)
+      await refreshPushDiagnostics(userId, { silentWhenMissing: !result.ok })
     } finally {
       setPushBusy(false)
     }
