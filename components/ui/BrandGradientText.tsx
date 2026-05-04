@@ -15,9 +15,10 @@ export function BrandGradientText({ text = "VIVOS", style, containerStyle }: Pro
       maskElement={<Text style={[styles.text, style]}>{text}</Text>}
     >
       <LinearGradient
-        colors={["#63A6E6", "#9B7CFF", "#C96AA1", "#F5D78E"]}
-        start={{ x: 0, y: 0.2 }}
-        end={{ x: 1, y: 0.8 }}
+        colors={["#53D7FF", "#8C7CFF", "#D869B6", "#FFD166"]}
+        locations={[0, 0.34, 0.68, 1]}
+        start={{ x: 0, y: 0.15 }}
+        end={{ x: 1, y: 0.9 }}
       >
         <Text style={[styles.text, style, styles.hidden]}>{text}</Text>
       </LinearGradient>
@@ -31,9 +32,10 @@ const styles = StyleSheet.create({
   },
   text: {
     color: "white",
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: "900",
-    letterSpacing: 1.1,
+    letterSpacing: 2.4,
+    textTransform: "uppercase",
   },
   hidden: {
     opacity: 0,
