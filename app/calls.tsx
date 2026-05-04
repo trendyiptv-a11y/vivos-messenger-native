@@ -6,6 +6,7 @@ import { AppShell } from "@/components/ui/AppShell"
 import { ScreenHeader } from "@/components/ui/ScreenHeader"
 import { BottomTabBar } from "@/components/ui/BottomTabBar"
 import { supabase } from "@/lib/supabase"
+import { t } from "@/lib/i18n"
 import { gradientTextSeed, theme } from "@/lib/theme"
 
 type CallRow = {
@@ -46,11 +47,11 @@ function isMissed(call: CallRow, currentUserId: string | null) {
 }
 
 function formatCallDate(date: string) {
-  return new Date(date).toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit" })
+  return new Date(date).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" })
 }
 
 function formatCallTime(date: string) {
-  return new Date(date).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })
+  return new Date(date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
 }
 
 export default function CallsScreen() {
@@ -152,19 +153,19 @@ export default function CallsScreen() {
 
   return (
     <AppShell padded={false}>
-      <ScreenHeader eyebrow="VIVOS Messenger" title="Apeluri" />
+      <ScreenHeader eyebrow="VIVOS Messenger" title={t("calls")} />
       <View style={styles.content}>
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={18} color={theme.colors.textDim} />
-          <TextInput value={search} onChangeText={setSearch} placeholder="Caută apeluri..." placeholderTextColor={theme.colors.textDim} style={styles.searchInput} />
+          <TextInput value={search} onChangeText={setSearch} placeholder={t("searchCalls")} placeholderTextColor={theme.colors.textDim} style={styles.searchInput} />
         </View>
 
         <View style={styles.filtersRow}>
           {[
-            { key: "all", label: "Toate" },
-            { key: "audio", label: "Audio" },
-            { key: "video", label: "Video" },
-            { key: "missed", label: "Ratate" },
+            { key: "all", label: t("all") },
+            { key: "audio", label: t("audio") },
+            { key: "video", label: t("video") },
+            { key: "missed", label: t("missed") },
           ].map((item) => {
             const active = filter === item.key
             return (
@@ -177,9 +178,9 @@ export default function CallsScreen() {
 
         <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
           {loading ? (
-            <Text style={styles.helper}>Se încarcă istoricul apelurilor...</Text>
+            <Text style={styles.helper}>{t("loadingCalls")}</Text>
           ) : filtered.length === 0 ? (
-            <Text style={styles.helper}>Nu există apeluri pentru filtrul selectat.</Text>
+            <Text style={styles.helper}>{t("noCalls")}</Text>
           ) : (
             filtered.map(({ call, otherLabel, incoming, missed }) => (
               <Pressable key={call.id} onPress={() => router.push(`/chat/${call.conversation_id}`)} style={({ pressed }) => [styles.callCard, pressed && styles.pressed]}>
@@ -193,7 +194,7 @@ export default function CallsScreen() {
                     <Ionicons name={call.call_type === "video" ? "videocam-outline" : "call-outline"} size={15} color={missed ? "#FCA5A5" : theme.colors.textSoft} />
                     <Ionicons name={incoming ? "arrow-down-outline" : "arrow-up-outline"} size={15} color={missed ? "#FCA5A5" : theme.colors.textSoft} />
                     <Text style={[styles.metaText, missed && styles.metaMissed]}>
-                      {missed ? "Ratat" : incoming ? "Primit" : "Inițiat"} · {call.call_type === "video" ? "Video" : "Audio"} · {formatCallTime(call.created_at)}
+                      {missed ? t("missed") : incoming ? "Primit" : "Inițiat"} · {call.call_type === "video" ? t("video") : t("audio")} · {formatCallTime(call.created_at)}
                     </Text>
                   </View>
                 </View>
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: theme.colors.text,
     fontSize: 17,
-    fontWeight: "850",
+    fontWeight: "800",
   },
   callDate: {
     color: theme.colors.textDim,
