@@ -10,16 +10,18 @@ import {
 } from "@/lib/calls/signaling"
 import { closeWebRtcManager, createWebRtcManager, prepareWebRtcLocalStream } from "@/lib/calls/webrtc"
 import { startIncomingCallFeedback, stopIncomingCallFeedback } from "@/lib/calls/ringtone"
+import { sendCallPush } from "@/lib/push"
 import { useCallMedia } from "@/hooks/useCallMedia"
 
 type Args = {
   conversationId: string
   userId: string | null
   calleeId: string | null
+  callerName?: string
   callChannelRef: React.MutableRefObject<RealtimeChannel | null>
 }
 
-export function useChatCallFlow({ conversationId, userId, calleeId, callChannelRef }: Args) {
+export function useChatCallFlow({ conversationId, userId, calleeId, callerName = "VIVOS", callChannelRef }: Args) {
   const [callUiState, setCallUiState] = useState<CallUiState>("idle")
   const [currentCallType, setCurrentCallType] = useState<CallType>("audio")
   const [callBusy, setCallBusy] = useState(false)
@@ -39,13 +41,13 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
     setWebrtcStatus(status)
   }, [stopMedia])
 
-  const receiveIncomingCall = useCallback(async (call: IncomingCall, callerName = "VIVOS") => {
+  const receiveIncomingCall = useCallback(async (call: IncomingCall, incomingCallerName = "VIVOS") => {
     setIncomingCall(call)
     setCurrentCallSessionId(call.callSessionId)
     setCurrentCallType(call.callType)
     setWebrtcStatus("În așteptare")
     setCallUiState("incoming")
-    await startIncomingCallFeedback(callerName, call.callType)
+    await startIncomingCallFeedback(incomingCallerName, call.callType)
   }, [])
 
   const startOutgoingCall = useCallback(async (callType: CallType) => {
@@ -85,6 +87,14 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
         },
       })
 
+      sendCallPush({
+        targetUserId: calleeId,
+        conversationId,
+        callerName,
+        callType,
+        callSessionId: session.id,
+      })
+
       setCurrentCallSessionId(session.id)
       setCallUiState("outgoing")
       return session
@@ -95,7 +105,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callChannelR
     } finally {
       setCallBusy(false)
     }
-  }, [userId, calleeId, callBusy, callUiState, startMedia, conversationId, callChannelRef, resetCallFlow])
+  }, [userId, calleeId, callBusy, callUiState, startMedia, conversationId, callChannelRef, resetCallFlow, callerName])
 
   const acceptIncomingCall = useCallback(async () => {
     if (!incomingCall?.callSessionId || !userId) return false
