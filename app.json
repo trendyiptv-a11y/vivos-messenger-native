@@ -25,8 +25,9 @@
     },
     "android": {
       "package": "app.vivos.messenger",
+      "icon": "./assets/images/icon.png",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#163865"
       },
       "permissions": [
