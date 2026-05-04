@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "631514497195",
+    "project_id": "vivos-3bfba",
+    "storage_bucket": "vivos-3bfba.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:631514497195:android:b68addd9b026b1a55a77ee",
+        "android_client_info": {
+          "package_name": "app.vivos.messenger"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAw4b22a4gzq4uwqI9YrFtXu59H3gkduT0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:631514497195:android:d83d7b73acf1149c5a77ee",
+        "android_client_info": {
+          "package_name": "com.vivos.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAw4b22a4gzq4uwqI9YrFtXu59H3gkduT0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
