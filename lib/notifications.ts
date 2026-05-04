@@ -9,6 +9,15 @@ export const NOTIFICATION_CHANNELS = {
   calls: "vivos-calls",
 }
 
+type PushRegistrationResult = {
+  ok: boolean
+  token: string | null
+  projectId: string | null
+  permissionGranted: boolean
+  stage: "permission" | "project" | "token" | "save" | "done"
+  error?: string
+}
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -49,22 +58,79 @@ export async function requestNotificationPermissions() {
   return Notifications.requestPermissionsAsync()
 }
 
-export async function registerPushToken(userId?: string | null) {
+function getProjectId() {
+  return Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId || null
+}
+
+export async function registerPushTokenDetailed(userId?: string | null): Promise<PushRegistrationResult> {
+  let token: string | null = null
+  const projectId = getProjectId()
+
   try {
     const permissions = await requestNotificationPermissions()
-    if (!permissions.granted && permissions.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL) {
-      return null
+    const permissionGranted = Boolean(
+      permissions.granted || permissions.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
+    )
+
+    if (!permissionGranted) {
+      return {
+        ok: false,
+        token: null,
+        projectId,
+        permissionGranted: false,
+        stage: "permission",
+        error: "Permisiunea pentru notificări nu este acordată.",
+      }
     }
 
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId
-    const tokenResult = projectId
-      ? await Notifications.getExpoPushTokenAsync({ projectId })
-      : await Notifications.getExpoPushTokenAsync()
+    if (!projectId) {
+      return {
+        ok: false,
+        token: null,
+        projectId: null,
+        permissionGranted: true,
+        stage: "project",
+        error: "Lipsește EAS projectId în build.",
+      }
+    }
 
-    const token = tokenResult.data
+    const tokenResult = await Notifications.getExpoPushTokenAsync({ projectId })
+    token = tokenResult.data
 
-    if (userId) {
-      await supabase.from("device_push_tokens").upsert(
+    if (!token) {
+      return {
+        ok: false,
+        token: null,
+        projectId,
+        permissionGranted: true,
+        stage: "token",
+        error: "Expo nu a returnat push token.",
+      }
+    }
+
+    if (!userId) {
+      return {
+        ok: false,
+        token,
+        projectId,
+        permissionGranted: true,
+        stage: "save",
+        error: "User ID lipsă; tokenul nu poate fi salvat.",
+      }
+    }
+
+    // Keep only the latest token for this user when RLS allows it.
+    await supabase.from("device_push_tokens").delete().eq("user_id", userId)
+
+    const { error: insertError } = await supabase.from("device_push_tokens").insert({
+      user_id: userId,
+      token,
+      platform: Platform.OS,
+      updated_at: new Date().toISOString(),
+    })
+
+    if (insertError) {
+      const { error: upsertError } = await supabase.from("device_push_tokens").upsert(
         {
           user_id: userId,
           token,
@@ -73,13 +139,43 @@ export async function registerPushToken(userId?: string | null) {
         },
         { onConflict: "token" }
       )
+
+      if (upsertError) {
+        return {
+          ok: false,
+          token,
+          projectId,
+          permissionGranted: true,
+          stage: "save",
+          error: upsertError.message || insertError.message,
+        }
+      }
     }
 
-    return token
+    return {
+      ok: true,
+      token,
+      projectId,
+      permissionGranted: true,
+      stage: "done",
+    }
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     console.warn("Push token registration failed", error)
-    return null
+    return {
+      ok: false,
+      token,
+      projectId,
+      permissionGranted: false,
+      stage: token ? "save" : "token",
+      error: message,
+    }
   }
+}
+
+export async function registerPushToken(userId?: string | null) {
+  const result = await registerPushTokenDetailed(userId)
+  return result.ok ? result.token : null
 }
 
 export async function clearNativeBadge() {
