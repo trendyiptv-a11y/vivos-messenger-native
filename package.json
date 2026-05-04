@@ -11,7 +11,10 @@
     "lint": "expo lint",
     "prebuild": "expo prebuild",
     "dev:android": "eas build --profile development --platform android",
-    "dev:ios": "eas build --profile development --platform ios"
+    "dev:ios": "eas build --profile development --platform ios",
+    "preview:android": "eas build --profile preview --platform android",
+    "play:android": "eas build --profile production --platform android",
+    "submit:android": "eas submit --profile production --platform android"
   },
   "dependencies": {
     "@config-plugins/react-native-webrtc": "12.0.0",
