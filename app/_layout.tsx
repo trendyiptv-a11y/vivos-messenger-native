@@ -7,6 +7,7 @@ import { AppErrorBoundary } from "@/components/system/AppErrorBoundary"
 import { useAuthSession } from "@/hooks/useAuthSession"
 import { clearNativeBadge, requestNotificationPermissions } from "@/lib/notifications"
 import { routeForegroundNotification, routeInitialNotificationResponse, routeNotificationResponse } from "@/lib/notificationRouting"
+import { registerNotifeeCallEvents, setupNotifeeCallChannel } from "@/lib/calls/notifeeCall"
 import { stopCallRingtone } from "@/lib/calls/callRingtone"
 import { theme } from "@/lib/theme"
 
@@ -31,6 +32,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     requestNotificationPermissions()
+    setupNotifeeCallChannel()
     clearNativeBadge()
 
     const subscription = AppState.addEventListener("change", (state) => {
@@ -47,6 +49,10 @@ export default function RootLayout() {
 
     routeInitialNotificationResponse(router)
 
+    const notifeeUnsubscribe = registerNotifeeCallEvents((conversationId) => {
+      router.push({ pathname: "/chat/[id]", params: { id: conversationId } })
+    })
+
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
       routeForegroundNotification(notification)
     })
@@ -56,6 +62,7 @@ export default function RootLayout() {
     })
 
     return () => {
+      notifeeUnsubscribe()
       receivedSubscription.remove()
       responseSubscription.remove()
       void stopCallRingtone()
