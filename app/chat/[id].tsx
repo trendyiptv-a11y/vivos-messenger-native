@@ -77,6 +77,7 @@ export default function ChatScreenIntegrated() {
     conversationId,
     userId,
     currentCallSessionId,
+    currentCallType,
     callChannelRef,
     startMedia,
     setIncomingCall: async (call) => {
