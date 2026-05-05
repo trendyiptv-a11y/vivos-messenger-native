@@ -1,6 +1,7 @@
 import { Platform, Vibration } from "react-native"
 import * as Notifications from "expo-notifications"
 import { NOTIFICATION_CATEGORIES, NOTIFICATION_CHANNELS } from "@/lib/notifications"
+import { cancelNotifeeIncomingCall, displayNotifeeIncomingCall } from "@/lib/calls/notifeeCall"
 
 let activeCallSessionId: string | null = null
 let ringtoneTimer: ReturnType<typeof setInterval> | null = null
@@ -18,6 +19,11 @@ type StartRingtoneArgs = {
 }
 
 async function fireRingNotification(args: StartRingtoneArgs) {
+  if (Platform.OS === "android") {
+    await displayNotifeeIncomingCall(args)
+    return
+  }
+
   try {
     const id = await Notifications.scheduleNotificationAsync({
       content: {
@@ -37,7 +43,7 @@ async function fireRingNotification(args: StartRingtoneArgs) {
           localRingtone: true,
         },
       },
-      trigger: Platform.OS === "android" ? { channelId: NOTIFICATION_CHANNELS.calls, seconds: 1 } : { seconds: 1 },
+      trigger: { seconds: 1 },
     })
 
     localNotificationIds.push(id)
@@ -87,6 +93,8 @@ export async function stopCallRingtone() {
   } catch (error) {
     console.warn("Call ringtone vibration cancel failed", error)
   }
+
+  await cancelNotifeeIncomingCall()
 
   const ids = [...localNotificationIds]
   localNotificationIds = []
