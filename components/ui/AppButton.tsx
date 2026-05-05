@@ -22,8 +22,8 @@ export function AppButton({
 }: Props) {
   const content = (
     <>
-      {loading ? <ActivityIndicator color={variant === "primary" ? "white" : theme.colors.text} /> : leftIcon}
-      <Text style={[styles.text, variant !== "primary" && styles.textAlt]}>{title}</Text>
+      {loading ? <ActivityIndicator color={variant === "primary" ? "white" : theme.colors.darkText} /> : leftIcon}
+      <Text style={[styles.text, variant === "ghost" && styles.textGhost, variant === "outline" && styles.textOutline]}>{title}</Text>
     </>
   )
 
@@ -79,17 +79,21 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.card,
   },
   outline: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: "transparent",
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
   },
   text: {
     color: "white",
     fontSize: 16,
     fontWeight: "700",
   },
-  textAlt: {
+  textGhost: {
     color: theme.colors.text,
+  },
+  textOutline: {
+    color: theme.colors.darkText,
+    fontWeight: "800",
   },
   disabled: {
     opacity: 0.55,
