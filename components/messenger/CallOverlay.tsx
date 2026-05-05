@@ -34,29 +34,38 @@ function statusLabel(callUiState: CallUiState, callType: CallType) {
   return callType === "video" ? "Apel video conectat" : "Apel audio conectat"
 }
 
+type ControlButtonVariant = "neutral" | "accept" | "danger" | "accent" | "muted"
+
 type ControlButtonProps = {
   icon: keyof typeof Ionicons.glyphMap
   onPress?: () => void
-  danger?: boolean
+  variant?: ControlButtonVariant
   disabled?: boolean
   large?: boolean
   active?: boolean
 }
 
-function ControlButton({ icon, onPress, danger = false, disabled = false, large = false, active = true }: ControlButtonProps) {
+function ControlButton({ icon, onPress, variant = "neutral", disabled = false, large = false, active = true }: ControlButtonProps) {
+  const isDisabled = disabled || !onPress
+
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled || !onPress}
+      disabled={isDisabled}
+      android_ripple={{ color: "rgba(255,255,255,0.20)", borderless: true, radius: large ? 42 : 36 }}
       style={({ pressed }) => [
         styles.controlButton,
         large && styles.controlButtonLarge,
-        danger && styles.controlButtonDanger,
+        variant === "accept" && styles.controlButtonAccept,
+        variant === "danger" && styles.controlButtonDanger,
+        variant === "accent" && styles.controlButtonAccent,
+        variant === "muted" && styles.controlButtonMuted,
         !active && styles.controlButtonInactive,
-        pressed && styles.pressed,
+        isDisabled && styles.controlButtonDisabled,
+        pressed && styles.controlButtonPressed,
       ]}
     >
-      <Ionicons name={icon} size={large ? 30 : 25} color="white" />
+      <Ionicons name={icon} size={large ? 31 : 24} color={active ? "white" : "#D1D5DB"} />
     </Pressable>
   )
 }
@@ -124,11 +133,20 @@ export function CallOverlay({
       <View style={styles.bottomShade} />
 
       <View style={styles.topBar}>
-        <Pressable onPress={isIncoming ? onReject : onEnd} disabled={callBusy} style={styles.topRoundButton}>
+        <Pressable
+          onPress={isIncoming ? onReject : onEnd}
+          disabled={callBusy}
+          android_ripple={{ color: "rgba(255,255,255,0.18)", borderless: true, radius: 32 }}
+          style={({ pressed }) => [styles.topRoundButton, pressed && styles.topRoundButtonPressed]}
+        >
           <Ionicons name={isIncoming ? "chevron-down" : "chevron-back"} size={28} color="white" />
         </Pressable>
 
-        <Pressable onPress={toggleWebRtcMicrophone} style={[styles.topRoundButton, !micEnabled && styles.controlButtonInactive]}>
+        <Pressable
+          onPress={toggleWebRtcMicrophone}
+          android_ripple={{ color: "rgba(255,255,255,0.18)", borderless: true, radius: 32 }}
+          style={({ pressed }) => [styles.topRoundButton, !micEnabled && styles.topRoundButtonOff, pressed && styles.topRoundButtonPressed]}
+        >
           <Ionicons name={micEnabled ? "mic-outline" : "mic-off-outline"} size={25} color="white" />
         </Pressable>
       </View>
@@ -168,19 +186,19 @@ export function CallOverlay({
         <View style={styles.dockHandle} />
         {isIncoming ? (
           <>
-            <ControlButton icon={micEnabled ? "mic-outline" : "mic-off-outline"} onPress={toggleWebRtcMicrophone} active={micEnabled} />
-            <ControlButton icon={isVideo ? (cameraEnabled ? "videocam-outline" : "videocam-off-outline") : "call-outline"} onPress={isVideo ? toggleWebRtcCamera : undefined} active={!isVideo || cameraEnabled} />
-            <ControlButton icon={speakerEnabled ? "volume-high-outline" : "volume-mute-outline"} onPress={toggleWebRtcSpeaker} active={speakerEnabled} />
-            <ControlButton icon="call-outline" onPress={onReject} danger disabled={callBusy} large />
-            <ControlButton icon={isVideo ? "videocam" : "call"} onPress={onAccept} disabled={callBusy} large />
+            <ControlButton icon={micEnabled ? "mic-outline" : "mic-off-outline"} onPress={toggleWebRtcMicrophone} variant={micEnabled ? "neutral" : "muted"} active={micEnabled} />
+            <ControlButton icon={isVideo ? (cameraEnabled ? "videocam-outline" : "videocam-off-outline") : "call-outline"} onPress={isVideo ? toggleWebRtcCamera : undefined} variant={cameraEnabled ? "neutral" : "muted"} active={!isVideo || cameraEnabled} />
+            <ControlButton icon={speakerEnabled ? "volume-high-outline" : "volume-mute-outline"} onPress={toggleWebRtcSpeaker} variant={speakerEnabled ? "accent" : "neutral"} active={speakerEnabled} />
+            <ControlButton icon="call-outline" onPress={onReject} variant="danger" disabled={callBusy} large />
+            <ControlButton icon={isVideo ? "videocam" : "call"} onPress={onAccept} variant="accept" disabled={callBusy} large />
           </>
         ) : (
           <>
-            <ControlButton icon={micEnabled ? "mic-outline" : "mic-off-outline"} onPress={toggleWebRtcMicrophone} active={micEnabled} />
-            <ControlButton icon={cameraEnabled ? "videocam-outline" : "videocam-off-outline"} onPress={isVideo ? toggleWebRtcCamera : undefined} active={!isVideo || cameraEnabled} />
-            <ControlButton icon="camera-reverse-outline" onPress={isVideo ? () => { switchWebRtcCamera() } : undefined} active={isVideo} />
-            <ControlButton icon={speakerEnabled ? "volume-high-outline" : "volume-mute-outline"} onPress={toggleWebRtcSpeaker} active={speakerEnabled} />
-            <ControlButton icon="call-outline" onPress={onEnd} danger disabled={callBusy} large />
+            <ControlButton icon={micEnabled ? "mic-outline" : "mic-off-outline"} onPress={toggleWebRtcMicrophone} variant={micEnabled ? "neutral" : "muted"} active={micEnabled} />
+            <ControlButton icon={cameraEnabled ? "videocam-outline" : "videocam-off-outline"} onPress={isVideo ? toggleWebRtcCamera : undefined} variant={cameraEnabled ? "neutral" : "muted"} active={!isVideo || cameraEnabled} />
+            <ControlButton icon="camera-reverse-outline" onPress={isVideo ? () => { switchWebRtcCamera() } : undefined} variant="neutral" active={isVideo} />
+            <ControlButton icon={speakerEnabled ? "volume-high-outline" : "volume-mute-outline"} onPress={toggleWebRtcSpeaker} variant={speakerEnabled ? "accent" : "neutral"} active={speakerEnabled} />
+            <ControlButton icon="call-outline" onPress={onEnd} variant="danger" disabled={callBusy} large />
           </>
         )}
       </View>
@@ -256,9 +274,17 @@ const styles = StyleSheet.create({
     borderRadius: 27,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  topRoundButtonOff: {
+    backgroundColor: "rgba(239,68,68,0.24)",
+    borderColor: "rgba(248,113,113,0.44)",
+  },
+  topRoundButtonPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.95 }],
   },
   identityBlock: {
     position: "absolute",
@@ -401,9 +427,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "rgba(8,9,18,0.86)",
+    backgroundColor: "rgba(8,9,18,0.88)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255,255,255,0.14)",
     shadowColor: "#7F70FF",
     shadowOpacity: 0.22,
     shadowRadius: 24,
@@ -425,25 +451,49 @@ const styles = StyleSheet.create({
     borderRadius: 31,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.085)",
+    backgroundColor: "rgba(255,255,255,0.14)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.18)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 8,
   },
   controlButtonLarge: {
     width: 72,
     height: 72,
     borderRadius: 36,
   },
+  controlButtonAccept: {
+    backgroundColor: "#22C55E",
+    borderColor: "#22C55E",
+    shadowColor: "#22C55E",
+    shadowOpacity: 0.34,
+  },
   controlButtonDanger: {
-    backgroundColor: "#F04444",
-    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "#EF4444",
+    borderColor: "#EF4444",
+    shadowColor: "#EF4444",
+    shadowOpacity: 0.34,
+  },
+  controlButtonAccent: {
+    backgroundColor: "rgba(37,99,235,0.68)",
+    borderColor: "rgba(96,165,250,0.72)",
+    shadowColor: "#60A5FA",
+    shadowOpacity: 0.25,
+  },
+  controlButtonMuted: {
+    backgroundColor: "rgba(239,68,68,0.20)",
+    borderColor: "rgba(248,113,113,0.42)",
   },
   controlButtonInactive: {
-    backgroundColor: "rgba(255,255,255,0.045)",
-    opacity: 0.58,
+    opacity: 0.68,
   },
-  pressed: {
-    opacity: 0.76,
-    transform: [{ scale: 0.98 }],
+  controlButtonDisabled: {
+    opacity: 0.46,
+  },
+  controlButtonPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.94 }],
   },
 })
