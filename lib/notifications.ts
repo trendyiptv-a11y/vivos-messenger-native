@@ -5,8 +5,8 @@ import { supabase } from "@/lib/supabase"
 import { t } from "@/lib/i18n"
 
 export const NOTIFICATION_CHANNELS = {
-  messages: "vivos-messages",
-  calls: "vivos-calls",
+  messages: "vivos-messages-v2",
+  calls: "vivos-calls-ring-v2",
 }
 
 export const NOTIFICATION_CATEGORIES = {
@@ -61,17 +61,20 @@ export async function configureAndroidNotificationChannels() {
 
   await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.messages, {
     name: "VIVOS Messages",
+    description: "Notificări scurte pentru mesajele VIVOS.",
     importance: Notifications.AndroidImportance.DEFAULT,
     vibrationPattern: [0, 180, 120, 180],
     lightColor: "#63A6E6",
     sound: "default",
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
   })
 
   await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.calls, {
     name: "VIVOS Calls",
+    description: "Apeluri VIVOS cu sunet și vibrație de apel.",
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 900, 400, 900, 400, 900],
-    lightColor: "#C96AA1",
+    lightColor: "#22C55E",
     sound: "default",
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   })
@@ -153,7 +156,6 @@ export async function registerPushTokenDetailed(userId?: string | null): Promise
       }
     }
 
-    // Keep only the latest token for this user when RLS allows it.
     await supabase.from("device_push_tokens").delete().eq("user_id", userId)
 
     const { error: insertError } = await supabase.from("device_push_tokens").insert({
