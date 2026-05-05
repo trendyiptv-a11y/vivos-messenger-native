@@ -17,6 +17,8 @@ export function NativeVideoSurface({ streamURL, label, compact = false, fill = f
     RTCView = null
   }
 
+  const isLocalPreview = compact || label.toLowerCase().includes("local") || label.toLowerCase().includes("tu")
+
   if (!RTCView || !streamURL) {
     return (
       <View style={[styles.fallback, fill && styles.fillSurface, compact && styles.compactSurface]}>
@@ -32,10 +34,10 @@ export function NativeVideoSurface({ streamURL, label, compact = false, fill = f
         streamURL={streamURL}
         style={StyleSheet.absoluteFillObject}
         objectFit="cover"
-        mirror={label.toLowerCase().includes("local") || label.toLowerCase().includes("tu")}
-        zOrder={compact ? 1 : 0}
+        mirror={isLocalPreview}
+        zOrder={compact ? 2 : 0}
       />
-      <View style={styles.badge}>
+      <View style={[styles.badge, compact && styles.compactBadge]}>
         <Text style={styles.badgeText}>{label}</Text>
       </View>
     </View>
@@ -61,9 +63,11 @@ const styles = StyleSheet.create({
     borderWidth: 0,
   },
   compactSurface: {
-    height: 118,
-    borderRadius: 18,
+    width: "100%",
+    height: "100%",
+    borderRadius: 22,
     marginTop: 0,
+    borderWidth: 0,
   },
   fallback: {
     width: "100%",
@@ -96,6 +100,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  compactBadge: {
+    left: 8,
+    bottom: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
   },
   badgeText: {
     color: "white",
