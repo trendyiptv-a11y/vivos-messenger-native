@@ -154,15 +154,22 @@ export default function InboxScreen() {
     let active = true
     load()
 
-    const channel = supabase
-      .channel("native-inbox-live")
+    const channelName = `native-inbox-live:${Date.now()}:${Math.random().toString(36).slice(2)}`
+    const channel = supabase.channel(channelName)
+
+    channel
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
         if (active && mountedRef.current) load()
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => {
         if (active && mountedRef.current) load()
       })
-      .subscribe()
+
+    channel.subscribe((status) => {
+      if (status === "CHANNEL_ERROR") {
+        console.warn("inbox realtime channel error")
+      }
+    })
 
     return () => {
       active = false
