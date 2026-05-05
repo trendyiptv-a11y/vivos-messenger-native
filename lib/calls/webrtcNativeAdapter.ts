@@ -3,6 +3,7 @@ import { CallType } from "@/types/call"
 import { IceServerConfig } from "@/lib/calls/turn"
 import { getWebRtcRuntimeState } from "@/lib/calls/webrtcRuntime"
 import { WEBRTC_PLACEHOLDERS } from "@/lib/calls/webrtcConfig"
+import { setNativeSpeakerphone, startNativeAudioRoute, stopNativeAudioRoute } from "@/lib/calls/audioRoute"
 
 type ReactNativeWebRtcModule = typeof import("react-native-webrtc")
 type PeerConnectionLike = InstanceType<ReactNativeWebRtcModule["RTCPeerConnection"]>
@@ -162,6 +163,8 @@ export async function createNativeWebRtcSession(callType: CallType, iceServers: 
     remoteStream: null,
   }
 
+  startNativeAudioRoute(callType)
+  pushDiagnostic(`Audio route pornit pentru ${callType}`)
   pushDiagnostic(`Sesiune nativă creată pentru ${callType}`)
   pushDiagnostic(runtime.note)
   pushDiagnostic(`ICE servers configurate: ${iceServers.length}`)
@@ -255,7 +258,8 @@ export async function switchNativeCamera() {
 
 export function setNativeSpeakerEnabled(enabled: boolean) {
   if (currentNativeSession) currentNativeSession.speakerEnabled = enabled
-  pushDiagnostic(enabled ? "Speaker activ" : "Speaker dezactivat")
+  const routed = setNativeSpeakerphone(enabled)
+  pushDiagnostic(enabled ? `Speaker activ${routed ? "" : " (fallback)"}` : `Speaker dezactivat${routed ? "" : " (fallback)"}`)
   return enabled
 }
 
@@ -337,6 +341,7 @@ export async function closeNativeWebRtcSession() {
     internals.localStream?.getTracks().forEach((track) => track.stop())
     internals.remoteStream?.getTracks().forEach((track) => track.stop())
     internals.peerConnection?.close()
+    stopNativeAudioRoute()
   } catch {
     // ignore cleanup failures
   }
