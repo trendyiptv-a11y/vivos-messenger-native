@@ -2,6 +2,7 @@ import * as Notifications from "expo-notifications"
 import { Router } from "expo-router"
 import { NOTIFICATION_ACTIONS } from "@/lib/notifications"
 import { setIncomingCallState } from "@/lib/calls/callState"
+import { startCallRingtone, stopCallRingtone } from "@/lib/calls/callRingtone"
 import { IncomingCall } from "@/types/call"
 
 type NotificationData = {
@@ -12,6 +13,8 @@ type NotificationData = {
   callType?: unknown
   fromUserId?: unknown
   callerUserId?: unknown
+  callerName?: unknown
+  title?: unknown
 }
 
 function asString(value: unknown) {
@@ -30,6 +33,8 @@ export function routeNotificationResponse(router: Router, response: Notification
   if (!conversationId) return
 
   if (kind === "incoming_call") {
+    void stopCallRingtone()
+
     const callSessionId = asString(data.callSessionId)
     const fromUserId = asString(data.fromUserId) || asString(data.callerUserId)
     const action =
@@ -56,4 +61,24 @@ export function routeNotificationResponse(router: Router, response: Notification
 export async function routeInitialNotificationResponse(router: Router) {
   const lastResponse = await Notifications.getLastNotificationResponseAsync()
   if (lastResponse) routeNotificationResponse(router, lastResponse)
+}
+
+export function routeForegroundNotification(notification: Notifications.Notification) {
+  const data = (notification.request.content.data ?? {}) as NotificationData
+  const kind = asString(data.kind) || asString(data.type)
+
+  if (kind !== "incoming_call") return
+
+  void startCallRingtone({
+    callSessionId: asString(data.callSessionId),
+    callerName:
+      asString(data.callerName) ||
+      asString(data.title) ||
+      notification.request.content.title ||
+      notification.request.content.body ||
+      "VIVOS",
+    callType: data.callType === "video" ? "video" : "audio",
+    conversationId: asString(data.conversationId),
+    fromUserId: asString(data.fromUserId) || asString(data.callerUserId),
+  })
 }
