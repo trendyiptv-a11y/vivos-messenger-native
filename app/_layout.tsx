@@ -6,7 +6,8 @@ import * as Notifications from "expo-notifications"
 import { AppErrorBoundary } from "@/components/system/AppErrorBoundary"
 import { useAuthSession } from "@/hooks/useAuthSession"
 import { clearNativeBadge, requestNotificationPermissions } from "@/lib/notifications"
-import { routeInitialNotificationResponse, routeNotificationResponse } from "@/lib/notificationRouting"
+import { routeForegroundNotification, routeInitialNotificationResponse, routeNotificationResponse } from "@/lib/notificationRouting"
+import { stopCallRingtone } from "@/lib/calls/callRingtone"
 import { theme } from "@/lib/theme"
 
 export default function RootLayout() {
@@ -46,11 +47,19 @@ export default function RootLayout() {
 
     routeInitialNotificationResponse(router)
 
+    const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      routeForegroundNotification(notification)
+    })
+
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
       routeNotificationResponse(router, response)
     })
 
-    return () => responseSubscription.remove()
+    return () => {
+      receivedSubscription.remove()
+      responseSubscription.remove()
+      void stopCallRingtone()
+    }
   }, [isAuthenticated, loading, router])
 
   if (loading) {
