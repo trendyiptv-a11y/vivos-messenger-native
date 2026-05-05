@@ -99,6 +99,39 @@ function getProjectId() {
   return Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId || null
 }
 
+async function saveTokenDirectly(userId: string, token: string) {
+  const payload = {
+    user_id: userId,
+    token,
+    platform: Platform.OS,
+    device_label: `vivos-messenger-${Platform.OS}`,
+    is_active: true,
+    updated_at: new Date().toISOString(),
+    last_seen_at: new Date().toISOString(),
+  }
+
+  const { error: upsertError } = await supabase.from("device_push_tokens").upsert(payload, {
+    onConflict: "token",
+  })
+
+  if (!upsertError) return null
+
+  // Older table variants may not have every metadata column. Keep token saving resilient.
+  const fallbackPayload = {
+    user_id: userId,
+    token,
+    platform: Platform.OS,
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { error: fallbackError } = await supabase.from("device_push_tokens").upsert(fallbackPayload, {
+    onConflict: "token",
+  })
+
+  return fallbackError || upsertError
+}
+
 export async function registerPushTokenDetailed(userId?: string | null): Promise<PushRegistrationResult> {
   let token: string | null = null
   const projectId = getProjectId()
@@ -156,35 +189,16 @@ export async function registerPushTokenDetailed(userId?: string | null): Promise
       }
     }
 
-    await supabase.from("device_push_tokens").delete().eq("user_id", userId)
+    const saveError = await saveTokenDirectly(userId, token)
 
-    const { error: insertError } = await supabase.from("device_push_tokens").insert({
-      user_id: userId,
-      token,
-      platform: Platform.OS,
-      updated_at: new Date().toISOString(),
-    })
-
-    if (insertError) {
-      const { error: upsertError } = await supabase.from("device_push_tokens").upsert(
-        {
-          user_id: userId,
-          token,
-          platform: Platform.OS,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "token" }
-      )
-
-      if (upsertError) {
-        return {
-          ok: false,
-          token,
-          projectId,
-          permissionGranted: true,
-          stage: "save",
-          error: upsertError.message || insertError.message,
-        }
+    if (saveError) {
+      return {
+        ok: false,
+        token,
+        projectId,
+        permissionGranted: true,
+        stage: "save",
+        error: saveError.message,
       }
     }
 
