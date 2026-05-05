@@ -34,6 +34,7 @@ type Args = {
   conversationId: string
   userId: string | null
   currentCallSessionId: string | null
+  currentCallType: CallType
   callChannelRef: React.MutableRefObject<RealtimeChannel | null>
   startMedia: (callType: CallType) => Promise<void>
   setIncomingCall: (call: IncomingCall | null) => void | Promise<void>
@@ -57,6 +58,7 @@ export function useChatCallSignaling({
   conversationId,
   userId,
   currentCallSessionId,
+  currentCallType,
   callChannelRef,
   startMedia,
   setIncomingCall,
@@ -78,7 +80,7 @@ export function useChatCallSignaling({
         callSessionId: currentCallSessionId,
         conversationId,
         fromUserId: userId,
-        callType: "audio",
+        callType: currentCallType,
       })
 
       await sendIceCandidateSignal(callChannelRef.current, {
@@ -91,7 +93,7 @@ export function useChatCallSignaling({
     return () => {
       setLocalIceCandidateHandler(null)
     }
-  }, [callChannelRef, conversationId, currentCallSessionId, setWebrtcStatus, userId])
+  }, [callChannelRef, conversationId, currentCallSessionId, currentCallType, setWebrtcStatus, userId])
 
   useEffect(() => {
     if (!conversationId) return
