@@ -9,7 +9,6 @@ import {
   createNativeOffer,
   createNativeWebRtcSession,
   getNativeWebRtcSession,
-  markNativeRemoteStreamReady,
   prepareNativeLocalStream,
   setNativeCameraEnabled,
   setNativeIceCandidateHandler,
@@ -56,6 +55,9 @@ function syncNativeFlags() {
   currentState.microphoneEnabled = nativeSession?.microphoneEnabled ?? true
   currentState.cameraEnabled = nativeSession?.cameraEnabled ?? currentState.callType === "video"
   currentState.speakerEnabled = nativeSession?.speakerEnabled ?? currentState.callType === "video"
+
+  const hasRealRemoteStream = Boolean(currentState.remoteStreamURL)
+  currentState.connected = hasRealRemoteStream || currentState.connectionState === "connected"
 
   const nativeDiagnostics = nativeSession?.diagnostics ?? []
   const combined = [...currentState.diagnostics, ...nativeDiagnostics]
@@ -115,7 +117,7 @@ export async function createWebRtcManager(callType: CallType) {
 
 export function getWebRtcManagerState() {
   syncNativeFlags()
-  return currentState
+  return currentState ? { ...currentState, diagnostics: [...currentState.diagnostics] } : null
 }
 
 export async function prepareWebRtcLocalStream() {
@@ -179,12 +181,7 @@ export async function applyRemoteDescription(description: SessionDescriptionLike
   if (currentState) {
     currentState.remoteDescription = description
     pushDiagnostic(`Remote description aplicată: ${description.type}`)
-    if (description.type === "answer") {
-      currentState.connected = true
-      await markNativeRemoteStreamReady()
-      syncNativeFlags()
-      pushDiagnostic("Conexiune marcată ca activă")
-    }
+    syncNativeFlags()
   }
 }
 
@@ -194,6 +191,7 @@ export async function addRemoteIceCandidate(candidate: IceCandidateLike) {
   if (currentState) {
     currentState.remoteCandidates.push(candidate)
     pushDiagnostic("ICE remote adăugat")
+    syncNativeFlags()
   }
 }
 
@@ -201,15 +199,16 @@ export async function addLocalIceCandidate(candidate: IceCandidateLike) {
   if (currentState) {
     currentState.localCandidates.push(candidate)
     pushDiagnostic("ICE local pregătit")
+    syncNativeFlags()
   }
 }
 
 export async function markWebRtcConnected() {
   if (currentState) {
-    currentState.connected = true
-    await markNativeRemoteStreamReady()
     syncNativeFlags()
-    pushDiagnostic("WebRTC conectat logic")
+    pushDiagnostic(
+      currentState.remoteStreamReady ? "WebRTC conectat cu remote stream" : "WebRTC signaling complet, aștept remote stream"
+    )
   }
 }
 
