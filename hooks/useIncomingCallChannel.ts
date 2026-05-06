@@ -9,6 +9,17 @@ type Props = {
   onCallEnded?: (callSessionId: string) => void
 }
 
+type CallSessionRow = {
+  id?: string
+  caller_id?: string | null
+  callee_id?: string | null
+  status?: string | null
+}
+
+function isTerminalCallStatus(status?: string | null) {
+  return status === "ended" || status === "rejected" || status === "missed" || status === "cancelled" || status === "canceled"
+}
+
 export function useIncomingCallChannel({ userId, onIncomingCall, onCallEnded }: Props) {
   useEffect(() => {
     if (!userId) return
@@ -33,6 +44,18 @@ export function useIncomingCallChannel({ userId, onIncomingCall, onCallEnded }: 
         clearIncomingCallState()
         onCallEnded?.(String(payload.callSessionId))
       })
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "call_sessions" },
+        ({ new: nextRow }) => {
+          const row = nextRow as CallSessionRow
+          if (!row?.id || !isTerminalCallStatus(row.status)) return
+          if (row.caller_id !== userId && row.callee_id !== userId) return
+
+          clearIncomingCallState()
+          onCallEnded?.(String(row.id))
+        }
+      )
       .subscribe()
 
     return () => {
