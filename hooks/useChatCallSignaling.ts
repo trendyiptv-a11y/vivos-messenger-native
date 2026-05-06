@@ -7,10 +7,12 @@ import {
   createLocalAnswer,
   createLocalOffer,
   createWebRtcManager,
+  getWebRtcManagerState,
   markWebRtcConnected,
   prepareWebRtcLocalStream,
   setLocalIceCandidateHandler,
 } from "@/lib/calls/webrtc"
+import { stopCallFeedback } from "@/lib/calls/ringtone"
 import {
   buildWebRtcSignalPayload,
   sendAnswerSignal,
@@ -52,6 +54,14 @@ function payloadToIncomingCall(payload: CallBroadcastPayload): IncomingCall | nu
     fromUserId: String(payload.fromUserId),
     callType: payload.callType === "video" ? "video" : "audio",
   }
+}
+
+function connectedStatusLabel() {
+  const state = getWebRtcManagerState()
+  if (!state) return "Conectat"
+  const audio = state.remoteAudioTracks ?? 0
+  const video = state.remoteVideoTracks ?? 0
+  return `Conectat: remote audio=${audio}, video=${video}`
 }
 
 export function useChatCallSignaling({
@@ -113,6 +123,7 @@ export function useChatCallSignaling({
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !userId) return
         const acceptedType: CallType = payload.callType === "video" ? "video" : "audio"
         try {
+          await stopCallFeedback()
           await startMedia(acceptedType)
           await createWebRtcManager(acceptedType)
           await prepareWebRtcLocalStream()
@@ -129,7 +140,7 @@ export function useChatCallSignaling({
           setCurrentCallType(acceptedType)
           setWebrtcStatus("Offer local trimis")
           await setIncomingCall(null)
-          setCallUiState("connected")
+          setCallUiState("outgoing")
         } catch (error) {
           console.warn("call_accept handling failed", error)
           if (active) await resetCallFlow("Eroare WebRTC")
@@ -138,12 +149,14 @@ export function useChatCallSignaling({
       .on("broadcast", { event: "call_reject" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
         if (!active) return
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId) return
+        await stopCallFeedback()
         await resetCallFlow("Respins")
       })
       .on("broadcast", { event: "call_end" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
         if (!active) return
         if (!payload?.callSessionId) return
         if (currentCallSessionId && payload.callSessionId !== currentCallSessionId) return
+        await stopCallFeedback()
         await resetCallFlow("Închis")
       })
       .on("broadcast", { event: "webrtc_offer" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
@@ -164,7 +177,9 @@ export function useChatCallSignaling({
           })
           await sendAnswerSignal(callChannelRef.current, { ...signalBase, sdp: answer })
           if (!active) return
+          await stopCallFeedback()
           setCurrentCallType(offerType)
+          setCallUiState("connected")
           setWebrtcStatus("Offer primit, answer trimis")
         } catch (error) {
           console.warn("webrtc_offer handling failed", error)
@@ -177,7 +192,11 @@ export function useChatCallSignaling({
         try {
           await applyRemoteDescription(payload.sdp)
           await markWebRtcConnected()
-          if (active) setWebrtcStatus("Answer primit")
+          await stopCallFeedback()
+          if (active) {
+            setCallUiState("connected")
+            setWebrtcStatus(connectedStatusLabel())
+          }
         } catch (error) {
           console.warn("webrtc_answer handling failed", error)
           if (active) await resetCallFlow("Eroare WebRTC")
