@@ -14,6 +14,7 @@ type NativeWebRtcInternals = {
   peerConnection: PeerConnectionLike | null
   localStream: StreamLike | null
   remoteStream: StreamLike | null
+  transceiversReady: boolean
 }
 
 export type NativeWebRtcSession = NativeStreamViewState & {
@@ -23,6 +24,8 @@ export type NativeWebRtcSession = NativeStreamViewState & {
   microphoneEnabled: boolean
   cameraEnabled: boolean
   speakerEnabled: boolean
+  remoteAudioTracks: number
+  remoteVideoTracks: number
 }
 
 let currentNativeSession: NativeWebRtcSession | null = null
@@ -33,6 +36,7 @@ let internals: NativeWebRtcInternals = {
   peerConnection: null,
   localStream: null,
   remoteStream: null,
+  transceiversReady: false,
 }
 
 function pushDiagnostic(message: string) {
@@ -55,12 +59,21 @@ function getModuleRef(): ReactNativeWebRtcModule | null {
   }
 }
 
+function ensureRemoteStream(moduleRef: ReactNativeWebRtcModule | null) {
+  if (internals.remoteStream) return internals.remoteStream
+  if (!moduleRef?.MediaStream) return null
+  internals.remoteStream = new moduleRef.MediaStream()
+  return internals.remoteStream
+}
+
 function syncStreamURLs() {
   if (!currentNativeSession) return
   currentNativeSession.localURL = internals.localStream?.toURL?.() ?? null
   currentNativeSession.remoteURL = internals.remoteStream?.toURL?.() ?? null
   currentNativeSession.localReady = Boolean(currentNativeSession.localURL)
-  currentNativeSession.remoteReady = Boolean(currentNativeSession.remoteURL)
+  currentNativeSession.remoteAudioTracks = internals.remoteStream?.getAudioTracks?.().length ?? 0
+  currentNativeSession.remoteVideoTracks = internals.remoteStream?.getVideoTracks?.().length ?? 0
+  currentNativeSession.remoteReady = Boolean(currentNativeSession.remoteURL && (currentNativeSession.remoteAudioTracks > 0 || currentNativeSession.remoteVideoTracks > 0))
 }
 
 function normalizeIceCandidate(candidate: any): IceCandidateLike | null {
@@ -78,6 +91,50 @@ function normalizeIceCandidate(candidate: any): IceCandidateLike | null {
     sdpMid: raw?.sdpMid ?? null,
     sdpMLineIndex: raw?.sdpMLineIndex ?? null,
     usernameFragment: raw?.usernameFragment ?? null,
+  }
+}
+
+function attachRemoteTrack(event: { streams?: StreamLike[]; track?: any }) {
+  const moduleRef = getModuleRef()
+  const remoteFromEvent = event.streams?.[0] ?? null
+
+  if (remoteFromEvent) {
+    internals.remoteStream = remoteFromEvent
+    syncStreamURLs()
+    pushDiagnostic(`Remote stream atașat: audio=${currentNativeSession?.remoteAudioTracks ?? 0}, video=${currentNativeSession?.remoteVideoTracks ?? 0}`)
+    return
+  }
+
+  if (event.track) {
+    const remote = ensureRemoteStream(moduleRef)
+    if (remote && typeof remote.addTrack === "function") {
+      const existingTracks = remote.getTracks?.() ?? []
+      const alreadyAdded = existingTracks.some((track: any) => track.id && track.id === event.track.id)
+      if (!alreadyAdded) remote.addTrack(event.track)
+      syncStreamURLs()
+      pushDiagnostic(`Track remote atașat manual: ${event.track.kind || "unknown"}`)
+      return
+    }
+  }
+
+  pushDiagnostic(event.track ? "Track remote primit, dar nu poate fi atașat" : "Track remote fără stream")
+}
+
+async function ensureReceiveTransceivers(pc: PeerConnectionLike) {
+  if (internals.transceiversReady) return
+  internals.transceiversReady = true
+
+  try {
+    const anyPc = pc as any
+    if (typeof anyPc.addTransceiver === "function") {
+      anyPc.addTransceiver("audio", { direction: "sendrecv" })
+      if (currentNativeSession?.callType === "video") {
+        anyPc.addTransceiver("video", { direction: "sendrecv" })
+      }
+      pushDiagnostic("Transceivere sendrecv configurate")
+    }
+  } catch (error) {
+    pushDiagnostic("Transceivere indisponibile; continui cu addTrack")
   }
 }
 
@@ -116,19 +173,17 @@ async function ensurePeerConnection() {
     }
   }
 
-  pc.ontrack = (event: { streams?: StreamLike[]; track?: any }) => {
-    const remote = event.streams?.[0] ?? null
-    if (remote) {
-      internals.remoteStream = remote
+  pc.ontrack = attachRemoteTrack
+  ;(pc as any).onaddstream = (event: { stream?: StreamLike }) => {
+    if (event.stream) {
+      internals.remoteStream = event.stream
       syncStreamURLs()
-      pushDiagnostic("Remote stream atașat")
-      return
+      pushDiagnostic(`Remote stream onaddstream: audio=${currentNativeSession?.remoteAudioTracks ?? 0}, video=${currentNativeSession?.remoteVideoTracks ?? 0}`)
     }
-
-    pushDiagnostic(event.track ? "Track remote primit" : "Track remote fără stream")
   }
 
   internals.peerConnection = pc
+  await ensureReceiveTransceivers(pc)
   return pc
 }
 
@@ -154,6 +209,8 @@ export async function createNativeWebRtcSession(callType: CallType, iceServers: 
     microphoneEnabled: true,
     cameraEnabled: callType === "video",
     speakerEnabled: callType === "video",
+    remoteAudioTracks: 0,
+    remoteVideoTracks: 0,
   }
 
   internals = {
@@ -161,6 +218,7 @@ export async function createNativeWebRtcSession(callType: CallType, iceServers: 
     peerConnection: null,
     localStream: null,
     remoteStream: null,
+    transceiversReady: false,
   }
 
   startNativeAudioRoute(callType)
@@ -215,7 +273,7 @@ export async function prepareNativeLocalStream() {
   })
   localStream.getTracks().forEach((track) => pc.addTrack(track, localStream))
   syncStreamURLs()
-  pushDiagnostic("Local stream nativ pregătit")
+  pushDiagnostic(`Local stream nativ pregătit: audio=${localStream.getAudioTracks?.().length ?? 0}, video=${localStream.getVideoTracks?.().length ?? 0}`)
 }
 
 export async function markNativeRemoteStreamReady() {
@@ -273,6 +331,7 @@ export async function createNativeOffer(): Promise<SessionDescriptionLike> {
     }
   }
 
+  await ensureReceiveTransceivers(pc)
   const offer = await pc.createOffer({
     offerToReceiveAudio: true,
     offerToReceiveVideo: currentNativeSession?.callType === "video",
@@ -295,6 +354,7 @@ export async function createNativeAnswer(): Promise<SessionDescriptionLike> {
     }
   }
 
+  await ensureReceiveTransceivers(pc)
   const answer = await pc.createAnswer()
   await pc.setLocalDescription(answer)
   pushDiagnostic("Answer nativ generat")
@@ -314,6 +374,7 @@ export async function applyNativeRemoteDescription(description: SessionDescripti
   }
 
   await pc.setRemoteDescription(new moduleRef.RTCSessionDescription(description))
+  syncStreamURLs()
   pushDiagnostic(`Remote description aplicată: ${description.type}`)
 }
 
@@ -333,6 +394,7 @@ export async function addNativeIceCandidate(candidate: IceCandidateLike) {
   }
 
   await pc.addIceCandidate(new moduleRef.RTCIceCandidate(normalized))
+  syncStreamURLs()
   pushDiagnostic("ICE candidate aplicat")
 }
 
@@ -354,5 +416,6 @@ export async function closeNativeWebRtcSession() {
     peerConnection: null,
     localStream: null,
     remoteStream: null,
+    transceiversReady: false,
   }
 }
