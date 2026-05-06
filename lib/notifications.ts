@@ -5,8 +5,8 @@ import { supabase } from "@/lib/supabase"
 import { t } from "@/lib/i18n"
 
 export const NOTIFICATION_CHANNELS = {
-  messages: "vivos-messages",
-  calls: "vivos-calls",
+  messages: "vivos-messages-v3",
+  calls: "vivos-calls-v2",
 }
 
 export const NOTIFICATION_CATEGORIES = {
@@ -63,7 +63,7 @@ export async function configureAndroidNotificationChannels() {
     name: "VIVOS Messages",
     description: "Notificări scurte pentru mesajele VIVOS.",
     importance: Notifications.AndroidImportance.DEFAULT,
-    vibrationPattern: [0, 180, 120, 180],
+    vibrationPattern: [0, 140],
     lightColor: "#63A6E6",
     sound: "default",
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
@@ -73,8 +73,8 @@ export async function configureAndroidNotificationChannels() {
     name: "VIVOS Calls",
     description: "Apeluri VIVOS cu sunet și vibrație de apel.",
     importance: Notifications.AndroidImportance.MAX,
-    vibrationPattern: [0, 900, 400, 900, 400, 900],
-    lightColor: "#22C55E",
+    vibrationPattern: [0, 900, 450, 900, 700, 900],
+    lightColor: "#C96AA1",
     sound: "default",
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   })
