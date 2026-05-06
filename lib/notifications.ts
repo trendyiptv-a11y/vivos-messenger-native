@@ -99,6 +99,38 @@ function getProjectId() {
   return Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId || null
 }
 
+async function getAccessToken() {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  return session?.access_token ?? null
+}
+
+async function saveTokenViaApi(token: string) {
+  const accessToken = await getAccessToken()
+  if (!accessToken) return new Error("Lipsește sesiunea pentru salvarea tokenului.")
+
+  const response = await fetch("https://vivos-api.vercel.app/api/device-token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      token,
+      platform: Platform.OS,
+      deviceLabel: `vivos-messenger-${Platform.OS}`,
+    }),
+  })
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => "")
+    return new Error(`API token save failed: ${response.status} ${details}`)
+  }
+
+  return null
+}
+
 async function saveTokenDirectly(userId: string, token: string) {
   const payload = {
     user_id: userId,
@@ -116,7 +148,6 @@ async function saveTokenDirectly(userId: string, token: string) {
 
   if (!upsertError) return null
 
-  // Older table variants may not have every metadata column. Keep token saving resilient.
   const fallbackPayload = {
     user_id: userId,
     token,
@@ -189,7 +220,9 @@ export async function registerPushTokenDetailed(userId?: string | null): Promise
       }
     }
 
-    const saveError = await saveTokenDirectly(userId, token)
+    const apiSaveError = await saveTokenViaApi(token)
+    const directSaveError = apiSaveError ? await saveTokenDirectly(userId, token) : null
+    const saveError = apiSaveError && directSaveError ? directSaveError : null
 
     if (saveError) {
       return {
