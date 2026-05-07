@@ -39,7 +39,7 @@ type ControlButtonVariant = "neutral" | "accept" | "danger" | "accent" | "muted"
 
 type ControlButtonProps = {
   icon: keyof typeof Ionicons.glyphMap
-  onPress?: () => void
+  onPress?: () => void | Promise<void>
   variant?: ControlButtonVariant
   disabled?: boolean
   large?: boolean
@@ -109,6 +109,7 @@ export function CallOverlay({
   const [localMicEnabled, setLocalMicEnabled] = useState(true)
   const [localCameraEnabled, setLocalCameraEnabled] = useState(isVideo)
   const [localSpeakerEnabled, setLocalSpeakerEnabled] = useState(isVideo)
+  const [cameraBusy, setCameraBusy] = useState(false)
 
   useEffect(() => {
     setLocalMicEnabled(currentWebRtcState?.microphoneEnabled ?? true)
@@ -133,15 +134,37 @@ export function CallOverlay({
     setLocalMicEnabled(next)
   }
 
-  function handleToggleCamera() {
-    if (!isVideo) return
-    const next = toggleWebRtcCamera()
-    setLocalCameraEnabled(next)
+  async function handleToggleCamera() {
+    if (!isVideo || cameraBusy) return
+
+    try {
+      setCameraBusy(true)
+      const next = await toggleWebRtcCamera()
+      setLocalCameraEnabled(Boolean(next))
+    } catch (error) {
+      console.warn("Camera toggle failed", error)
+      setLocalCameraEnabled(false)
+    } finally {
+      setCameraBusy(false)
+    }
   }
 
   function handleToggleSpeaker() {
     const next = toggleWebRtcSpeaker()
     setLocalSpeakerEnabled(next)
+  }
+
+  async function handleSwitchCamera() {
+    if (!isVideo || cameraBusy) return
+
+    try {
+      setCameraBusy(true)
+      await switchWebRtcCamera()
+    } catch (error) {
+      console.warn("Camera switch failed", error)
+    } finally {
+      setCameraBusy(false)
+    }
   }
 
   return (
@@ -179,8 +202,12 @@ export function CallOverlay({
       </View>
 
       <View style={styles.identityBlock}>
-        <Text numberOfLines={1} style={styles.nameText}>{otherName}</Text>
-        <Text numberOfLines={1} style={styles.statusText}>{statusLabel(callUiState, currentCallType)}</Text>
+        <Text numberOfLines={1} style={styles.nameText}>
+          {otherName}
+        </Text>
+        <Text numberOfLines={1} style={styles.statusText}>
+          {statusLabel(callUiState, currentCallType)}
+        </Text>
         {!isConnected ? <CallingPulse /> : null}
       </View>
 
@@ -213,18 +240,56 @@ export function CallOverlay({
         <View style={styles.dockHandle} />
         {isIncoming ? (
           <>
-            <ControlButton icon={micEnabled ? "mic-outline" : "mic-off-outline"} onPress={handleToggleMicrophone} variant={micEnabled ? "neutral" : "muted"} active={micEnabled} />
-            <ControlButton icon={isVideo ? (cameraEnabled ? "videocam-outline" : "videocam-off-outline") : "call-outline"} onPress={isVideo ? handleToggleCamera : undefined} variant={isVideo && !cameraEnabled ? "muted" : "neutral"} active={!isVideo || cameraEnabled} />
-            <ControlButton icon={speakerEnabled ? "volume-high-outline" : "volume-mute-outline"} onPress={handleToggleSpeaker} variant={speakerEnabled ? "accent" : "neutral"} active={speakerEnabled} />
+            <ControlButton
+              icon={micEnabled ? "mic-outline" : "mic-off-outline"}
+              onPress={handleToggleMicrophone}
+              variant={micEnabled ? "neutral" : "muted"}
+              active={micEnabled}
+            />
+            <ControlButton
+              icon={isVideo ? (cameraEnabled ? "videocam-outline" : "videocam-off-outline") : "call-outline"}
+              onPress={isVideo ? handleToggleCamera : undefined}
+              variant={isVideo && !cameraEnabled ? "muted" : "neutral"}
+              active={!isVideo || cameraEnabled}
+              disabled={cameraBusy}
+            />
+            <ControlButton
+              icon={speakerEnabled ? "volume-high-outline" : "volume-mute-outline"}
+              onPress={handleToggleSpeaker}
+              variant={speakerEnabled ? "accent" : "neutral"}
+              active={speakerEnabled}
+            />
             <ControlButton icon="call-outline" onPress={onReject} variant="danger" disabled={callBusy} large />
             <ControlButton icon={isVideo ? "videocam" : "call"} onPress={onAccept} variant="accept" disabled={callBusy} large />
           </>
         ) : (
           <>
-            <ControlButton icon={micEnabled ? "mic-outline" : "mic-off-outline"} onPress={handleToggleMicrophone} variant={micEnabled ? "neutral" : "muted"} active={micEnabled} />
-            <ControlButton icon={cameraEnabled ? "videocam-outline" : "videocam-off-outline"} onPress={isVideo ? handleToggleCamera : undefined} variant={isVideo && !cameraEnabled ? "muted" : "neutral"} active={!isVideo || cameraEnabled} />
-            <ControlButton icon="camera-reverse-outline" onPress={isVideo ? () => { switchWebRtcCamera() } : undefined} variant="neutral" active={isVideo} />
-            <ControlButton icon={speakerEnabled ? "volume-high-outline" : "volume-mute-outline"} onPress={handleToggleSpeaker} variant={speakerEnabled ? "accent" : "neutral"} active={speakerEnabled} />
+            <ControlButton
+              icon={micEnabled ? "mic-outline" : "mic-off-outline"}
+              onPress={handleToggleMicrophone}
+              variant={micEnabled ? "neutral" : "muted"}
+              active={micEnabled}
+            />
+            <ControlButton
+              icon={cameraEnabled ? "videocam-outline" : "videocam-off-outline"}
+              onPress={isVideo ? handleToggleCamera : undefined}
+              variant={isVideo && !cameraEnabled ? "muted" : "neutral"}
+              active={!isVideo || cameraEnabled}
+              disabled={cameraBusy}
+            />
+            <ControlButton
+              icon="camera-reverse-outline"
+              onPress={isVideo ? handleSwitchCamera : undefined}
+              variant="neutral"
+              active={isVideo}
+              disabled={cameraBusy}
+            />
+            <ControlButton
+              icon={speakerEnabled ? "volume-high-outline" : "volume-mute-outline"}
+              onPress={handleToggleSpeaker}
+              variant={speakerEnabled ? "accent" : "neutral"}
+              active={speakerEnabled}
+            />
             <ControlButton icon="call-outline" onPress={onEnd} variant="danger" disabled={callBusy} large />
           </>
         )}
