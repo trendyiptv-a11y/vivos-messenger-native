@@ -165,7 +165,7 @@ export function useChatConversation(conversationId: string) {
     let active = true
 
     const messageChannel = supabase
-      .channel(`chat-${conversationId}`)
+      .channel(`chat-${conversationId}-${Date.now()}`)
       .on(
         "postgres_changes",
         {
