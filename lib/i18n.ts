@@ -22,6 +22,8 @@ type TranslationKey =
   | "messageNotificationTitle"
   | "callNotificationTitle"
   | "callNotificationBody"
+  | "acceptCall"
+  | "rejectCall"
 
 const translations: Record<LocaleKey, Record<TranslationKey, string>> = {
   ro: {
@@ -43,7 +45,9 @@ const translations: Record<LocaleKey, Record<TranslationKey, string>> = {
     incomingVideoCall: "Apel video primit",
     messageNotificationTitle: "Mesaj VIVOS",
     callNotificationTitle: "Apel VIVOS",
-    callNotificationBody: "Te sună în VIVOS Messenger",
+    callNotificationBody: "te sună în VIVOS Messenger",
+    acceptCall: "Acceptă",
+    rejectCall: "Respinge",
   },
   da: {
     messages: "Beskeder",
@@ -65,6 +69,8 @@ const translations: Record<LocaleKey, Record<TranslationKey, string>> = {
     messageNotificationTitle: "VIVOS-besked",
     callNotificationTitle: "VIVOS-opkald",
     callNotificationBody: "ringer til dig i VIVOS Messenger",
+    acceptCall: "Accepter",
+    rejectCall: "Afvis",
   },
   en: {
     messages: "Messages",
@@ -86,17 +92,22 @@ const translations: Record<LocaleKey, Record<TranslationKey, string>> = {
     messageNotificationTitle: "VIVOS message",
     callNotificationTitle: "VIVOS call",
     callNotificationBody: "is calling you in VIVOS Messenger",
+    acceptCall: "Accept",
+    rejectCall: "Decline",
   },
 }
 
-export function getSystemLanguage(): LocaleKey {
-  const languageCode = Localization.getLocales()[0]?.languageCode?.toLowerCase()
-  if (languageCode === "da") return "da"
-  if (languageCode === "ro") return "ro"
+const LOCALE: LocaleKey = (() => {
+  const code = Localization.getLocales()[0]?.languageCode?.toLowerCase()
+  if (code === "da") return "da"
+  if (code === "ro") return "ro"
   return "en"
+})()
+
+export function getSystemLanguage(): LocaleKey {
+  return LOCALE
 }
 
 export function t(key: TranslationKey) {
-  const locale = getSystemLanguage()
-  return translations[locale][key] ?? translations.en[key] ?? key
+  return translations[LOCALE][key] ?? translations.en[key] ?? key
 }
