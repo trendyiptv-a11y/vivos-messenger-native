@@ -39,7 +39,7 @@ type Args = {
   currentCallType: CallType
   callChannelRef: React.MutableRefObject<RealtimeChannel | null>
   startMedia: (callType: CallType) => Promise<void>
-  setIncomingCall: (call: IncomingCall | null) => void | Promise<void>
+  onCallInvite: (call: IncomingCall, callerName?: string) => void | Promise<void>
   setCurrentCallType: (callType: CallType) => void
   setCallUiState: (state: "idle" | "outgoing" | "incoming" | "connected") => void
   setWebrtcStatus: (status: string) => void
@@ -59,8 +59,9 @@ function payloadToIncomingCall(payload: CallBroadcastPayload): IncomingCall | nu
 function connectedStatusLabel() {
   const state = getWebRtcManagerState()
   if (!state) return "Conectat"
-  const audio = state.remoteAudioTracks ?? 0
-  const video = state.remoteVideoTracks ?? 0
+  const session = state as any
+  const audio = session.remoteAudioTracks ?? 0
+  const video = session.remoteVideoTracks ?? 0
   return `Conectat: remote audio=${audio}, video=${video}`
 }
 
@@ -71,7 +72,7 @@ export function useChatCallSignaling({
   currentCallType,
   callChannelRef,
   startMedia,
-  setIncomingCall,
+  onCallInvite,
   setCurrentCallType,
   setCallUiState,
   setWebrtcStatus,
@@ -85,14 +86,12 @@ export function useChatCallSignaling({
 
     setLocalIceCandidateHandler(async (candidate) => {
       if (!currentCallSessionId) return
-
       const signalBase = buildWebRtcSignalPayload({
         callSessionId: currentCallSessionId,
         conversationId,
         fromUserId: userId,
         callType: currentCallType,
       })
-
       await sendIceCandidateSignal(callChannelRef.current, {
         ...signalBase,
         candidate,
@@ -107,6 +106,7 @@ export function useChatCallSignaling({
 
   useEffect(() => {
     if (!conversationId) return
+
     let active = true
 
     const callChannel = supabase
@@ -116,30 +116,36 @@ export function useChatCallSignaling({
         if (payload?.toUserId !== userId || payload.fromUserId === userId) return
         const incoming = payloadToIncomingCall(payload)
         if (!incoming) return
-        await setIncomingCall(incoming)
+        await onCallInvite(incoming)
       })
       .on("broadcast", { event: "call_accept" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
         if (!active) return
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !userId) return
+
         const acceptedType: CallType = payload.callType === "video" ? "video" : "audio"
+
         try {
           await stopCallFeedback()
           await startMedia(acceptedType)
           await createWebRtcManager(acceptedType)
           await prepareWebRtcLocalStream()
           const offer = await createLocalOffer()
+
           if (!active) return
+
           const signalBase = buildWebRtcSignalPayload({
             callSessionId: payload.callSessionId,
             conversationId,
             fromUserId: userId,
             callType: acceptedType,
           })
+
           await sendOfferSignal(callChannelRef.current, { ...signalBase, sdp: offer })
+
           if (!active) return
+
           setCurrentCallType(acceptedType)
           setWebrtcStatus("Offer local trimis")
-          await setIncomingCall(null)
           setCallUiState("outgoing")
         } catch (error) {
           console.warn("call_accept handling failed", error)
@@ -162,21 +168,29 @@ export function useChatCallSignaling({
       .on("broadcast", { event: "webrtc_offer" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
         if (!active) return
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !payload?.sdp || !userId) return
+
         const offerType: CallType = payload.callType === "video" ? "video" : "audio"
+
         try {
+          await startMedia(offerType)
           await createWebRtcManager(offerType)
           await prepareWebRtcLocalStream()
           await applyRemoteDescription(payload.sdp)
           const answer = await createLocalAnswer()
+
           if (!active) return
+
           const signalBase = buildWebRtcSignalPayload({
             callSessionId: payload.callSessionId,
             conversationId,
             fromUserId: userId,
             callType: offerType,
           })
+
           await sendAnswerSignal(callChannelRef.current, { ...signalBase, sdp: answer })
+
           if (!active) return
+
           await stopCallFeedback()
           setCurrentCallType(offerType)
           setCallUiState("connected")
@@ -189,10 +203,12 @@ export function useChatCallSignaling({
       .on("broadcast", { event: "webrtc_answer" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
         if (!active) return
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !payload?.sdp) return
+
         try {
           await applyRemoteDescription(payload.sdp)
           await markWebRtcConnected()
           await stopCallFeedback()
+
           if (active) {
             setCallUiState("connected")
             setWebrtcStatus(connectedStatusLabel())
@@ -205,6 +221,7 @@ export function useChatCallSignaling({
       .on("broadcast", { event: "ice_candidate" }, async ({ payload }: { payload: CallBroadcastPayload }) => {
         if (!active) return
         if (!payload?.callSessionId || payload.callSessionId !== currentCallSessionId || !payload?.candidate) return
+
         try {
           await addRemoteIceCandidate(payload.candidate)
           if (active) setWebrtcStatus("ICE primit")
@@ -223,5 +240,5 @@ export function useChatCallSignaling({
         console.warn("call channel cleanup failed", error)
       })
     }
-  }, [conversationId, currentCallSessionId, resetCallFlow, setCallUiState, setCurrentCallType, setIncomingCall, setWebrtcStatus, startMedia, userId, callChannelRef])
+  }, [conversationId, currentCallSessionId, resetCallFlow, setCallUiState, setCurrentCallType, onCallInvite, setWebrtcStatus, startMedia, userId, callChannelRef])
 }
