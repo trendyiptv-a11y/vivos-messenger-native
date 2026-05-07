@@ -5,8 +5,8 @@ import { supabase } from "@/lib/supabase"
 import { t } from "@/lib/i18n"
 
 export const NOTIFICATION_CHANNELS = {
-  messages: "vivos-messages-v3",
-  calls: "vivos-calls-v2",
+  messages: "vivos-messages-v4",
+  calls: "vivos-calls-v3",
 }
 
 export const NOTIFICATION_CATEGORIES = {
