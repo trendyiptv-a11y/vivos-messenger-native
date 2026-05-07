@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { KeyboardAvoidingView, Platform, StyleSheet } from "react-native"
+import { KeyboardAvoidingView, Platform, StyleSheet, ScrollView, View } from "react-native"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 import { RealtimeChannel } from "@supabase/supabase-js"
@@ -10,6 +10,7 @@ import { CallOverlay } from "@/components/messenger/CallOverlay"
 import { ChatHeaderActions } from "@/components/messenger/ChatHeaderActions"
 import { ChatInputBar } from "@/components/messenger/ChatInputBar"
 import { MessageBubbleList } from "@/components/messenger/MessageBubbleList"
+import { VivosCallV2Panel } from "@/components/calls-v2/VivosCallV2Panel"
 import { useChatCallFlow } from "@/hooks/useChatCallFlow"
 import { useChatCallSignaling } from "@/hooks/useChatCallSignaling"
 import { useChatConversation } from "@/hooks/useChatConversation"
@@ -137,10 +138,12 @@ export default function ChatScreenIntegrated() {
 
   function handleBackToInbox() {
     setMenuOpen(false)
+
     if (router.canGoBack()) {
       router.back()
       return
     }
+
     router.replace("/inbox")
   }
 
@@ -172,7 +175,24 @@ export default function ChatScreenIntegrated() {
       />
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <MessageBubbleList scrollRef={scrollRef} loading={loading} messages={messages} userId={userId} />
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <VivosCallV2Panel
+            conversationId={conversationId}
+            userId={userId}
+            remoteUserId={otherMember?.member_id ?? null}
+            remoteName={otherName}
+          />
+
+          <View style={styles.messagesWrap}>
+            <MessageBubbleList scrollRef={scrollRef} loading={loading} messages={messages} userId={userId} />
+          </View>
+        </ScrollView>
+
         <ChatInputBar value={body} onChangeText={setBody} onSend={handleSend} sending={sending} />
       </KeyboardAvoidingView>
 
@@ -194,5 +214,15 @@ export default function ChatScreenIntegrated() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
+  flex: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 12,
+  },
+  messagesWrap: {
+    flex: 1,
+    minHeight: 320,
+  },
 })
