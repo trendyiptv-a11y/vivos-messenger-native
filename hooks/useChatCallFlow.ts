@@ -8,7 +8,7 @@ import {
   logCallEvent,
   rejectCallSession,
 } from "@/lib/calls/signaling"
-import { closeWebRtcManager, createWebRtcManager, prepareWebRtcLocalStream } from "@/lib/calls/webrtc"
+import { closeWebRtcManager } from "@/lib/calls/webrtc"
 import { startIncomingCallFeedback, startOutgoingCallFeedback, stopCallFeedback, stopIncomingCallFeedback } from "@/lib/calls/ringtone"
 import { cancelNativeIncomingCall, displayNativeIncomingCall } from "@/lib/nativeIncomingCall"
 import { sendCallPush } from "@/lib/push"
@@ -59,10 +59,6 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
     try {
       setCallBusy(true)
       setCurrentCallType(callType)
-      await startMedia(callType)
-      await createWebRtcManager(callType)
-      await prepareWebRtcLocalStream()
-      setWebrtcStatus("Media pregătită")
 
       const session = await createOutgoingCallSession({
         conversationId,
@@ -113,7 +109,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
     } finally {
       setCallBusy(false)
     }
-  }, [userId, calleeId, callBusy, callUiState, startMedia, conversationId, callChannelRef, resetCallFlow, callerName])
+  }, [userId, calleeId, callBusy, callUiState, conversationId, callChannelRef, resetCallFlow, callerName])
 
   const acceptIncomingCall = useCallback(async () => {
     if (!incomingCall?.callSessionId || !userId) return false
@@ -122,9 +118,6 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
       setCallBusy(true)
       await cancelNativeIncomingCall(incomingCall.callSessionId)
       await stopIncomingCallFeedback()
-      await startMedia(incomingCall.callType)
-      await createWebRtcManager(incomingCall.callType)
-      await prepareWebRtcLocalStream()
       await acceptCallSession(incomingCall.callSessionId, incomingCall.callType)
 
       await logCallEvent({
@@ -158,7 +151,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
     } finally {
       setCallBusy(false)
     }
-  }, [incomingCall, userId, startMedia, conversationId, callChannelRef, resetCallFlow])
+  }, [incomingCall, userId, conversationId, callChannelRef, resetCallFlow])
 
   const rejectIncomingCall = useCallback(async () => {
     if (!incomingCall?.callSessionId || !userId) return
