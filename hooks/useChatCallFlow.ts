@@ -97,6 +97,8 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
         callerName,
         callType,
         callSessionId: session.id,
+      }).catch((err) => {
+        console.warn("sendCallPush failed", err)
       })
 
       await startOutgoingCallFeedback()
@@ -146,7 +148,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
       setWebrtcStatus("Acceptat, aștept offer")
       setCurrentCallSessionId(incomingCall.callSessionId)
       setCurrentCallType(incomingCall.callType)
-      setCallUiState("outgoing")
+      setCallUiState("connected")
       setIncomingCall(null)
       return true
     } catch (error) {
@@ -194,6 +196,7 @@ export function useChatCallFlow({ conversationId, userId, calleeId, callerName =
   const stopCurrentCall = useCallback(async () => {
     try {
       await stopCallFeedback()
+
       if (currentCallSessionId) {
         await cancelNativeIncomingCall(currentCallSessionId)
         await endCallSession(currentCallSessionId)
