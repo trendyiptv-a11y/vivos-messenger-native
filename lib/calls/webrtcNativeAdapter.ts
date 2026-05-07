@@ -68,12 +68,17 @@ function ensureRemoteStream(moduleRef: ReactNativeWebRtcModule | null) {
 
 function syncStreamURLs() {
   if (!currentNativeSession) return
+
   currentNativeSession.localURL = internals.localStream?.toURL?.() ?? null
   currentNativeSession.remoteURL = internals.remoteStream?.toURL?.() ?? null
   currentNativeSession.localReady = Boolean(currentNativeSession.localURL)
+
   currentNativeSession.remoteAudioTracks = internals.remoteStream?.getAudioTracks?.().length ?? 0
   currentNativeSession.remoteVideoTracks = internals.remoteStream?.getVideoTracks?.().length ?? 0
-  currentNativeSession.remoteReady = Boolean(currentNativeSession.remoteURL && (currentNativeSession.remoteAudioTracks > 0 || currentNativeSession.remoteVideoTracks > 0))
+  currentNativeSession.remoteReady = Boolean(
+    currentNativeSession.remoteURL &&
+      (currentNativeSession.remoteAudioTracks > 0 || currentNativeSession.remoteVideoTracks > 0)
+  )
 }
 
 function normalizeIceCandidate(candidate: any): IceCandidateLike | null {
@@ -101,7 +106,11 @@ function attachRemoteTrack(event: { streams?: StreamLike[]; track?: any }) {
   if (remoteFromEvent) {
     internals.remoteStream = remoteFromEvent
     syncStreamURLs()
-    pushDiagnostic(`Remote stream atașat: audio=${currentNativeSession?.remoteAudioTracks ?? 0}, video=${currentNativeSession?.remoteVideoTracks ?? 0}`)
+    pushDiagnostic(
+      `Remote stream atașat: audio=${currentNativeSession?.remoteAudioTracks ?? 0}, video=${
+        currentNativeSession?.remoteVideoTracks ?? 0
+      }`
+    )
     return
   }
 
@@ -133,7 +142,7 @@ async function ensureReceiveTransceivers(pc: PeerConnectionLike) {
       }
       pushDiagnostic("Transceivere sendrecv configurate")
     }
-  } catch (error) {
+  } catch {
     pushDiagnostic("Transceivere indisponibile; continui cu addTrack")
   }
 }
@@ -174,11 +183,16 @@ async function ensurePeerConnection() {
   }
 
   pc.ontrack = attachRemoteTrack
+
   ;(pc as any).onaddstream = (event: { stream?: StreamLike }) => {
     if (event.stream) {
       internals.remoteStream = event.stream
       syncStreamURLs()
-      pushDiagnostic(`Remote stream onaddstream: audio=${currentNativeSession?.remoteAudioTracks ?? 0}, video=${currentNativeSession?.remoteVideoTracks ?? 0}`)
+      pushDiagnostic(
+        `Remote stream onaddstream: audio=${currentNativeSession?.remoteAudioTracks ?? 0}, video=${
+          currentNativeSession?.remoteVideoTracks ?? 0
+        }`
+      )
     }
   }
 
@@ -187,9 +201,7 @@ async function ensurePeerConnection() {
   return pc
 }
 
-export function setNativeIceCandidateHandler(
-  handler: ((candidate: IceCandidateLike) => Promise<void> | void) | null
-) {
+export function setNativeIceCandidateHandler(handler: ((candidate: IceCandidateLike) => Promise<void> | void) | null) {
   localIceCandidateHandler = handler
 }
 
@@ -244,6 +256,7 @@ export async function prepareNativeLocalStream() {
   const pc = await ensurePeerConnection()
 
   if (!currentNativeSession) return
+
   if (!moduleRef || !pc) {
     currentNativeSession.localReady = true
     pushDiagnostic("Local stream fallback marcat ca pregătit")
@@ -258,22 +271,27 @@ export async function prepareNativeLocalStream() {
 
   const localStream = await moduleRef.mediaDevices.getUserMedia({
     audio: true,
-    video:
-      currentNativeSession.callType === "video"
-        ? { facingMode: "user" }
-        : false,
+    video: currentNativeSession.callType === "video" ? { facingMode: "user" } : false,
   })
 
   internals.localStream = localStream
+
   localStream.getAudioTracks?.().forEach((track: any) => {
     track.enabled = currentNativeSession?.microphoneEnabled ?? true
   })
+
   localStream.getVideoTracks?.().forEach((track: any) => {
     track.enabled = currentNativeSession?.cameraEnabled ?? true
   })
+
   localStream.getTracks().forEach((track) => pc.addTrack(track, localStream))
+
   syncStreamURLs()
-  pushDiagnostic(`Local stream nativ pregătit: audio=${localStream.getAudioTracks?.().length ?? 0}, video=${localStream.getVideoTracks?.().length ?? 0}`)
+  pushDiagnostic(
+    `Local stream nativ pregătit: audio=${localStream.getAudioTracks?.().length ?? 0}, video=${
+      localStream.getVideoTracks?.().length ?? 0
+    }`
+  )
 }
 
 export async function markNativeRemoteStreamReady() {
@@ -286,24 +304,81 @@ export async function markNativeRemoteStreamReady() {
 
 export function setNativeMicrophoneEnabled(enabled: boolean) {
   if (currentNativeSession) currentNativeSession.microphoneEnabled = enabled
+
   internals.localStream?.getAudioTracks?.().forEach((track: any) => {
     track.enabled = enabled
   })
+
   pushDiagnostic(enabled ? "Microfon activ" : "Microfon dezactivat")
   return enabled
 }
 
-export function setNativeCameraEnabled(enabled: boolean) {
+export async function setNativeCameraEnabled(enabled: boolean) {
   if (currentNativeSession) currentNativeSession.cameraEnabled = enabled
+
+  const existingVideoTracks = internals.localStream?.getVideoTracks?.() ?? []
+
+  if (enabled && existingVideoTracks.length === 0 && currentNativeSession?.callType === "video") {
+    const moduleRef = getModuleRef()
+    const pc = await ensurePeerConnection()
+
+    if (!moduleRef || !pc) {
+      pushDiagnostic("Camera nu poate fi reactivată: WebRTC indisponibil")
+      return false
+    }
+
+    try {
+      const cameraStream = await moduleRef.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: "user" },
+      })
+
+      const cameraTrack = cameraStream.getVideoTracks?.()[0]
+
+      if (!cameraTrack) {
+        pushDiagnostic("Camera nu poate fi reactivată: lipsește video track")
+        return false
+      }
+
+      if (internals.localStream && typeof internals.localStream.addTrack === "function") {
+        internals.localStream.addTrack(cameraTrack)
+      } else {
+        internals.localStream = cameraStream
+      }
+
+      try {
+        const senders = typeof pc.getSenders === "function" ? pc.getSenders() : []
+        const videoSender = senders.find((sender: any) => sender.track?.kind === "video")
+
+        if (videoSender && typeof videoSender.replaceTrack === "function") {
+          await videoSender.replaceTrack(cameraTrack)
+        } else {
+          pc.addTrack(cameraTrack, internals.localStream)
+        }
+      } catch {
+        pc.addTrack(cameraTrack, internals.localStream)
+      }
+
+      pushDiagnostic("Video track recreat pentru cameră")
+    } catch (error) {
+      console.warn("Camera restart failed", error)
+      pushDiagnostic("Reactivarea camerei a eșuat")
+      return false
+    }
+  }
+
   internals.localStream?.getVideoTracks?.().forEach((track: any) => {
     track.enabled = enabled
   })
+
+  syncStreamURLs()
   pushDiagnostic(enabled ? "Camera activă" : "Camera dezactivată")
   return enabled
 }
 
 export async function switchNativeCamera() {
   const videoTrack = internals.localStream?.getVideoTracks?.()[0] as any
+
   if (videoTrack && typeof videoTrack._switchCamera === "function") {
     await videoTrack._switchCamera()
     pushDiagnostic("Camera schimbată")
@@ -316,13 +391,16 @@ export async function switchNativeCamera() {
 
 export function setNativeSpeakerEnabled(enabled: boolean) {
   if (currentNativeSession) currentNativeSession.speakerEnabled = enabled
+
   const routed = setNativeSpeakerphone(enabled)
   pushDiagnostic(enabled ? `Speaker activ${routed ? "" : " (fallback)"}` : `Speaker dezactivat${routed ? "" : " (fallback)"}`)
+
   return enabled
 }
 
 export async function createNativeOffer(): Promise<SessionDescriptionLike> {
   const pc = await ensurePeerConnection()
+
   if (!pc) {
     pushDiagnostic("Offer placeholder generat")
     return {
@@ -332,12 +410,15 @@ export async function createNativeOffer(): Promise<SessionDescriptionLike> {
   }
 
   await ensureReceiveTransceivers(pc)
+
   const offer = await pc.createOffer({
     offerToReceiveAudio: true,
     offerToReceiveVideo: currentNativeSession?.callType === "video",
   })
+
   await pc.setLocalDescription(offer)
   pushDiagnostic("Offer nativ generat")
+
   return {
     type: "offer",
     sdp: offer.sdp || WEBRTC_PLACEHOLDERS.offer,
@@ -346,6 +427,7 @@ export async function createNativeOffer(): Promise<SessionDescriptionLike> {
 
 export async function createNativeAnswer(): Promise<SessionDescriptionLike> {
   const pc = await ensurePeerConnection()
+
   if (!pc) {
     pushDiagnostic("Answer placeholder generat")
     return {
@@ -355,9 +437,11 @@ export async function createNativeAnswer(): Promise<SessionDescriptionLike> {
   }
 
   await ensureReceiveTransceivers(pc)
+
   const answer = await pc.createAnswer()
   await pc.setLocalDescription(answer)
   pushDiagnostic("Answer nativ generat")
+
   return {
     type: "answer",
     sdp: answer.sdp || WEBRTC_PLACEHOLDERS.answer,
@@ -380,6 +464,7 @@ export async function applyNativeRemoteDescription(description: SessionDescripti
 
 export async function addNativeIceCandidate(candidate: IceCandidateLike) {
   const normalized = normalizeIceCandidate(candidate)
+
   if (!normalized) {
     pushDiagnostic("ICE placeholder ignorat")
     return
@@ -411,6 +496,7 @@ export async function closeNativeWebRtcSession() {
   currentNativeSession = null
   currentIceServers = []
   localIceCandidateHandler = null
+
   internals = {
     moduleRef: null,
     peerConnection: null,
