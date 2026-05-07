@@ -7,6 +7,7 @@ import notifee, {
   EventType,
 } from "@notifee/react-native"
 import { Platform, Vibration } from "react-native"
+import InCallManager from "react-native-incall-manager"
 import { NOTIFICATION_ACTIONS, NOTIFICATION_CHANNELS } from "@/lib/notifications"
 import { setIncomingCallState } from "@/lib/calls/callState"
 import { IncomingCall } from "@/types/call"
@@ -46,7 +47,7 @@ export async function setupNotifeeCallChannel() {
 
   return notifee.createChannel({
     id: NOTIFICATION_CHANNELS.calls,
-    name: "VIVOS Messages",
+    name: "VIVOS Calls",
     importance: AndroidImportance.MAX,
     sound: "default",
     vibration: true,
@@ -67,6 +68,10 @@ export async function displayNotifeeIncomingCall(args: IncomingCallNotificationA
   const callerName = args.callerName?.trim() || "Un membru VIVOS"
 
   await setupNotifeeCallChannel()
+
+  try {
+    InCallManager.startRingtone("_DEFAULT_")
+  } catch {}
 
   try {
     Vibration.vibrate([0, ...RING_VIBRATION_PATTERN], true)
@@ -129,6 +134,10 @@ export async function displayNotifeeIncomingCall(args: IncomingCallNotificationA
 }
 
 export async function cancelNotifeeIncomingCall() {
+  try {
+    InCallManager.stopRingtone()
+  } catch {}
+
   try {
     Vibration.cancel()
   } catch {}
