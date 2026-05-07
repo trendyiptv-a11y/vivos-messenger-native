@@ -47,7 +47,7 @@ export async function setupNotifeeCallChannel() {
   return notifee.createChannel({
     id: NOTIFICATION_CHANNELS.calls,
     name: "VIVOS Calls",
-    importance: AndroidImportance.HIGH,
+    importance: AndroidImportance.MAX,
     sound: "default",
     vibration: true,
     vibrationPattern: RING_VIBRATION_PATTERN,
