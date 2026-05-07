@@ -61,8 +61,7 @@ export async function configureAndroidNotificationChannels() {
 
   // Doar messages — canalul calls e creat exclusiv de Notifee în setupNotifeeCallChannel
   await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.messages, {
-    name: "VIVOS Messages",
-    description: "Notificări scurte pentru mesajele VIVOS.",
+    name: "VIVOS Calls",
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 140],
     lightColor: "#63A6E6",
