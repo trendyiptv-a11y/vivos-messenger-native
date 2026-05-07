@@ -63,7 +63,7 @@ export async function configureAndroidNotificationChannels() {
   await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.messages, {
     name: "VIVOS Messages",
     description: "Notificări scurte pentru mesajele VIVOS.",
-    importance: Notifications.AndroidImportance.DEFAULT,
+    importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 140],
     lightColor: "#63A6E6",
     sound: "default",
