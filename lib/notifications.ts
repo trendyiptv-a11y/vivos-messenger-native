@@ -40,14 +40,14 @@ export async function configureNotificationCategories() {
   await Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.incomingCall, [
     {
       identifier: NOTIFICATION_ACTIONS.acceptCall,
-      buttonTitle: "Acceptă",
+      buttonTitle: t("acceptCall"),
       options: {
         opensAppToForeground: true,
       },
     },
     {
       identifier: NOTIFICATION_ACTIONS.rejectCall,
-      buttonTitle: "Respinge",
+      buttonTitle: t("rejectCall"),
       options: {
         opensAppToForeground: true,
         isDestructive: true,
@@ -59,6 +59,7 @@ export async function configureNotificationCategories() {
 export async function configureAndroidNotificationChannels() {
   if (Platform.OS !== "android") return
 
+  // Doar messages — canalul calls e creat exclusiv de Notifee în setupNotifeeCallChannel
   await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.messages, {
     name: "VIVOS Messages",
     description: "Notificări scurte pentru mesajele VIVOS.",
@@ -67,16 +68,6 @@ export async function configureAndroidNotificationChannels() {
     lightColor: "#63A6E6",
     sound: "default",
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
-  })
-
-  await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.calls, {
-    name: "VIVOS Calls",
-    description: "Apeluri VIVOS cu sunet și vibrație de apel.",
-    importance: Notifications.AndroidImportance.MAX,
-    vibrationPattern: [0, 900, 450, 900, 700, 900],
-    lightColor: "#C96AA1",
-    sound: "default",
-    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   })
 }
 
@@ -174,50 +165,22 @@ export async function registerPushTokenDetailed(userId?: string | null): Promise
     )
 
     if (!permissionGranted) {
-      return {
-        ok: false,
-        token: null,
-        projectId,
-        permissionGranted: false,
-        stage: "permission",
-        error: "Permisiunea pentru notificări nu este acordată.",
-      }
+      return { ok: false, token: null, projectId, permissionGranted: false, stage: "permission", error: "Permisiunea pentru notificări nu este acordată." }
     }
 
     if (!projectId) {
-      return {
-        ok: false,
-        token: null,
-        projectId: null,
-        permissionGranted: true,
-        stage: "project",
-        error: "Lipsește EAS projectId în build.",
-      }
+      return { ok: false, token: null, projectId: null, permissionGranted: true, stage: "project", error: "Lipsește EAS projectId în build." }
     }
 
     const tokenResult = await Notifications.getExpoPushTokenAsync({ projectId })
     token = tokenResult.data
 
     if (!token) {
-      return {
-        ok: false,
-        token: null,
-        projectId,
-        permissionGranted: true,
-        stage: "token",
-        error: "Expo nu a returnat push token.",
-      }
+      return { ok: false, token: null, projectId, permissionGranted: true, stage: "token", error: "Expo nu a returnat push token." }
     }
 
     if (!userId) {
-      return {
-        ok: false,
-        token,
-        projectId,
-        permissionGranted: true,
-        stage: "save",
-        error: "User ID lipsă; tokenul nu poate fi salvat.",
-      }
+      return { ok: false, token, projectId, permissionGranted: true, stage: "save", error: "User ID lipsă; tokenul nu poate fi salvat." }
     }
 
     const apiSaveError = await saveTokenViaApi(token)
@@ -225,34 +188,14 @@ export async function registerPushTokenDetailed(userId?: string | null): Promise
     const saveError = apiSaveError && directSaveError ? directSaveError : null
 
     if (saveError) {
-      return {
-        ok: false,
-        token,
-        projectId,
-        permissionGranted: true,
-        stage: "save",
-        error: saveError.message,
-      }
+      return { ok: false, token, projectId, permissionGranted: true, stage: "save", error: saveError.message }
     }
 
-    return {
-      ok: true,
-      token,
-      projectId,
-      permissionGranted: true,
-      stage: "done",
-    }
+    return { ok: true, token, projectId, permissionGranted: true, stage: "done" }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.warn("Push token registration failed", error)
-    return {
-      ok: false,
-      token,
-      projectId,
-      permissionGranted: false,
-      stage: token ? "save" : "token",
-      error: message,
-    }
+    return { ok: false, token, projectId, permissionGranted: false, stage: token ? "save" : "token", error: message }
   }
 }
 
@@ -277,7 +220,9 @@ export async function showLocalMessageNotification(title: string, body: string) 
       sound: "default",
       badge: 1,
     },
-    trigger: Platform.OS === "android" ? { channelId: NOTIFICATION_CHANNELS.messages, seconds: 1 } : { seconds: 1 },
+    trigger: Platform.OS === "android"
+      ? { channelId: NOTIFICATION_CHANNELS.messages, seconds: 1 }
+      : { seconds: 1 },
   })
 }
 
@@ -292,6 +237,8 @@ export async function showLocalIncomingCallNotification(callerName: string, call
       categoryIdentifier: NOTIFICATION_CATEGORIES.incomingCall,
       data: { kind: "incoming_call", callType },
     },
-    trigger: Platform.OS === "android" ? { channelId: NOTIFICATION_CHANNELS.calls, seconds: 1 } : { seconds: 1 },
+    trigger: Platform.OS === "android"
+      ? { channelId: NOTIFICATION_CHANNELS.calls, seconds: 1 }
+      : { seconds: 1 },
   })
 }
