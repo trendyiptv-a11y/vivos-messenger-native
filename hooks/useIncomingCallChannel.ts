@@ -9,24 +9,16 @@ type Props = {
   onCallEnded?: (callSessionId: string) => void
 }
 
-type CallSessionRow = {
-  id?: string
-  caller_id?: string | null
-  callee_id?: string | null
-  status?: string | null
-}
-
-function isTerminalCallStatus(status?: string | null) {
-  return status === "ended" || status === "rejected" || status === "missed" || status === "cancelled" || status === "canceled"
-}
-
 export function useIncomingCallChannel({ userId, onIncomingCall, onCallEnded }: Props) {
   useEffect(() => {
     if (!userId) return
 
+    let active = true
+
     const channel = supabase
       .channel(`native-call-channel-${userId}`)
       .on("broadcast", { event: "call_invite" }, ({ payload }) => {
+        if (!active) return
         if (!payload || payload.toUserId !== userId || payload.fromUserId === userId) return
 
         const call: IncomingCall = {
@@ -40,26 +32,27 @@ export function useIncomingCallChannel({ userId, onIncomingCall, onCallEnded }: 
         onIncomingCall?.(call)
       })
       .on("broadcast", { event: "call_end" }, ({ payload }) => {
+        if (!active) return
         if (!payload?.callSessionId) return
+
         clearIncomingCallState()
         onCallEnded?.(String(payload.callSessionId))
       })
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "call_sessions" },
-        ({ new: nextRow }) => {
-          const row = nextRow as CallSessionRow
-          if (!row?.id || !isTerminalCallStatus(row.status)) return
-          if (row.caller_id !== userId && row.callee_id !== userId) return
+      .on("broadcast", { event: "call_reject" }, ({ payload }) => {
+        if (!active) return
+        if (!payload?.callSessionId) return
 
-          clearIncomingCallState()
-          onCallEnded?.(String(row.id))
-        }
-      )
+        clearIncomingCallState()
+        onCallEnded?.(String(payload.callSessionId))
+      })
       .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      active = false
+      clearIncomingCallState()
+      supabase.removeChannel(channel).catch((error) => {
+        console.warn("incoming call channel cleanup failed", error)
+      })
     }
   }, [userId, onIncomingCall, onCallEnded])
 }
