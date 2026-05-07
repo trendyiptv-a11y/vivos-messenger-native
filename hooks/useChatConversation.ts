@@ -34,6 +34,12 @@ export function useChatConversation(conversationId: string) {
   const [messages, setMessages] = useState<MessageRow[]>([])
   const [members, setMembers] = useState<MemberRow[]>([])
   const [body, setBody] = useState("")
+  const bodyRef = useRef("")
+
+  function updateBody(text: string) {
+    bodyRef.current = text
+    setBody(text)
+  }
 
   useEffect(() => {
     mountedRef.current = true
@@ -206,11 +212,11 @@ export function useChatConversation(conversationId: string) {
   const selfName = selfMember?.name?.trim() || selfMember?.alias?.trim() || selfMember?.email?.trim() || "VIVOS"
 
   async function handleSend() {
-    if (!body.trim() || !userId || sending) return
+    const text = bodyRef.current.trim()
+    if (!text || !userId || sending) return
     setSending(true)
 
     try {
-      const text = body.trim()
       const { data, error } = await supabase
         .from("messages")
         .insert({
@@ -222,6 +228,7 @@ export function useChatConversation(conversationId: string) {
         .single()
 
       if (!error && mountedRef.current) {
+        bodyRef.current = ""
         setBody("")
       }
 
@@ -247,7 +254,7 @@ export function useChatConversation(conversationId: string) {
     messages,
     members,
     body,
-    setBody,
+    setBody: updateBody,
     otherMember,
     otherName,
     handleSend,
