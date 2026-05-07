@@ -1,12 +1,12 @@
 import { Stack, useRouter, useSegments } from "expo-router"
 import { ActivityIndicator, AppState, View } from "react-native"
 import { StatusBar } from "expo-status-bar"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import * as Notifications from "expo-notifications"
 import { AppErrorBoundary } from "@/components/system/AppErrorBoundary"
 import { useAuthSession } from "@/hooks/useAuthSession"
 import { clearNativeBadge, requestNotificationPermissions } from "@/lib/notifications"
-import { routeForegroundNotification, routeInitialNotificationResponse, routeNotificationResponse } from "@/lib/notificationRouting"
+import { routeForegroundNotification, routeNotificationResponse } from "@/lib/notificationRouting"
 import { registerNotifeeCallEvents, setupNotifeeCallChannel } from "@/lib/calls/notifeeCall"
 import { stopCallRingtone } from "@/lib/calls/callRingtone"
 import { theme } from "@/lib/theme"
@@ -15,16 +15,14 @@ export default function RootLayout() {
   const { isAuthenticated, loading } = useAuthSession()
   const segments = useSegments()
   const router = useRouter()
+  const processedNotifIds = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (loading) return
-
     const inAuthGroup = ["login", "signup"].includes(String(segments[0] || ""))
-
     if (!isAuthenticated && !inAuthGroup) {
       router.replace("/login")
     }
-
     if (isAuthenticated && inAuthGroup) {
       router.replace("/inbox")
     }
@@ -34,20 +32,24 @@ export default function RootLayout() {
     requestNotificationPermissions()
     setupNotifeeCallChannel()
     clearNativeBadge()
-
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         clearNativeBadge()
       }
     })
-
     return () => subscription.remove()
   }, [])
 
   useEffect(() => {
     if (!isAuthenticated || loading) return
 
-    routeInitialNotificationResponse(router)
+    Notifications.getLastNotificationResponseAsync().then((lastResponse) => {
+      if (!lastResponse) return
+      const id = lastResponse.notification.request.identifier
+      if (processedNotifIds.current.has(id)) return
+      processedNotifIds.current.add(id)
+      routeNotificationResponse(router, lastResponse)
+    })
 
     const notifeeUnsubscribe = registerNotifeeCallEvents((conversationId) => {
       router.push({ pathname: "/chat/[id]", params: { id: conversationId } })
@@ -58,6 +60,9 @@ export default function RootLayout() {
     })
 
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const id = response.notification.request.identifier
+      if (processedNotifIds.current.has(id)) return
+      processedNotifIds.current.add(id)
       routeNotificationResponse(router, response)
     })
 
