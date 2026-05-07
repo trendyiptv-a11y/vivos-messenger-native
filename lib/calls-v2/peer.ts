@@ -134,26 +134,19 @@ async function addLocalTracksToPeer(pc: PeerConnectionLike) {
     pc.addTrack(track, stream)
   })
 
-  pushDiagnostic(`Track-uri locale adăugate: audio=${stream.getAudioTracks?.().length ?? 0}, video=${stream.getVideoTracks?.().length ?? 0}`)
+  pushDiagnostic(
+    `Track-uri locale adăugate: audio=${stream.getAudioTracks?.().length ?? 0}, video=${
+      stream.getVideoTracks?.().length ?? 0
+    }`
+  )
 }
 
 async function ensureReceiveTransceivers(pc: PeerConnectionLike, callType: VivosCallType) {
-  const anyPc = pc as any
-
-  if (typeof anyPc.addTransceiver !== "function") return
-
-  try {
-    anyPc.addTransceiver("audio", { direction: "sendrecv" })
-
-    if (callType === "video") {
-      anyPc.addTransceiver("video", { direction: "sendrecv" })
-    }
-
-    pushDiagnostic("Transceivere sendrecv configurate")
-  } catch (error) {
-    console.warn("addTransceiver failed", error)
-    pushDiagnostic("Transceivere indisponibile; continui cu addTrack")
-  }
+  // V2 simplificat:
+  // Nu adăugăm transceivere manuale în React Native.
+  // Folosim doar addTrack(localTrack, localStream).
+  // Asta evită dublarea m-line-urilor în SDP și pierderea track-ului Android -> Web.
+  pushDiagnostic(`Transceivere manuale omise pentru ${callType}`)
 }
 
 export function setVivosLocalIceHandler(handler: ((candidate: VivosIceCandidate) => void | Promise<void>) | null) {
