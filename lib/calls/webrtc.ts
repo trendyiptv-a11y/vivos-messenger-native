@@ -46,7 +46,9 @@ function pushDiagnostic(message: string) {
 
 function syncNativeFlags() {
   if (!currentState) return
+
   const nativeSession = getNativeWebRtcSession()
+
   currentState.localStreamReady = Boolean(nativeSession?.localReady)
   currentState.remoteStreamReady = Boolean(nativeSession?.remoteReady)
   currentState.localStreamURL = nativeSession?.localURL ?? null
@@ -55,8 +57,10 @@ function syncNativeFlags() {
   currentState.microphoneEnabled = nativeSession?.microphoneEnabled ?? true
   currentState.cameraEnabled = nativeSession?.cameraEnabled ?? currentState.callType === "video"
   currentState.speakerEnabled = nativeSession?.speakerEnabled ?? currentState.callType === "video"
+
   const hasRealRemoteStream = Boolean(currentState.remoteStreamURL)
   currentState.connected = hasRealRemoteStream || currentState.connectionState === "connected"
+
   const nativeDiagnostics = nativeSession?.diagnostics ?? []
   const combined = [...currentState.diagnostics, ...nativeDiagnostics]
   currentState.diagnostics = combined.slice(-10)
@@ -68,6 +72,7 @@ function bindNativeIceHandler() {
       currentState.localCandidates.push(candidate)
       pushDiagnostic("ICE local pregătit")
     }
+
     if (externalLocalIceHandler) {
       await externalLocalIceHandler(candidate)
     }
@@ -83,7 +88,9 @@ export function setLocalIceCandidateHandler(
 
 export async function createWebRtcManager(callType: CallType) {
   const { iceServers } = await loadTurnCredentials().catch(() => ({ iceServers: [] as IceServerConfig[] }))
+
   await createNativeWebRtcSession(callType, iceServers)
+
   currentState = {
     callType,
     localDescription: null,
@@ -102,10 +109,12 @@ export async function createWebRtcManager(callType: CallType) {
     cameraEnabled: callType === "video",
     speakerEnabled: callType === "video",
   }
+
   bindNativeIceHandler()
   pushDiagnostic(`Manager creat pentru ${callType}`)
   pushDiagnostic(`ICE servers: ${iceServers.length}`)
   syncNativeFlags()
+
   return currentState
 }
 
@@ -122,51 +131,63 @@ export async function prepareWebRtcLocalStream() {
 
 export function toggleWebRtcMicrophone() {
   const next = !(currentState?.microphoneEnabled ?? true)
+
   setNativeMicrophoneEnabled(next)
   syncNativeFlags()
+
   return next
 }
 
-export function toggleWebRtcCamera() {
+export async function toggleWebRtcCamera() {
   const next = !(currentState?.cameraEnabled ?? true)
-  setNativeCameraEnabled(next)
+
+  const applied = await setNativeCameraEnabled(next)
   syncNativeFlags()
-  return next
+
+  return applied
 }
 
 export async function switchWebRtcCamera() {
   const switched = await switchNativeCamera()
   syncNativeFlags()
+
   return switched
 }
 
 export function toggleWebRtcSpeaker() {
   const next = !(currentState?.speakerEnabled ?? currentState?.callType === "video")
+
   setNativeSpeakerEnabled(next)
   syncNativeFlags()
+
   return next
 }
 
 export async function createLocalOffer(): Promise<SessionDescriptionLike> {
   const offer = await createNativeOffer()
+
   if (currentState) {
     currentState.localDescription = offer
     pushDiagnostic("Offer local generat")
   }
+
   return offer
 }
 
 export async function createLocalAnswer(): Promise<SessionDescriptionLike> {
   const answer = await createNativeAnswer()
+
   if (currentState) {
     currentState.localDescription = answer
     pushDiagnostic("Answer local generat")
   }
+
   return answer
 }
 
 export async function applyRemoteDescription(description: SessionDescriptionLike) {
   await applyNativeRemoteDescription(description)
+
   if (currentState) {
     currentState.remoteDescription = description
     pushDiagnostic(`Remote description aplicată: ${description.type}`)
@@ -176,6 +197,7 @@ export async function applyRemoteDescription(description: SessionDescriptionLike
 
 export async function addRemoteIceCandidate(candidate: IceCandidateLike) {
   await addNativeIceCandidate(candidate)
+
   if (currentState) {
     currentState.remoteCandidates.push(candidate)
     pushDiagnostic("ICE remote adăugat")
@@ -203,6 +225,8 @@ export async function markWebRtcConnected() {
 export async function closeWebRtcManager() {
   setNativeIceCandidateHandler(null)
   externalLocalIceHandler = null
+
   await closeNativeWebRtcSession()
+
   currentState = null
 }
