@@ -14,7 +14,6 @@ import { useChatCallFlow } from "@/hooks/useChatCallFlow"
 import { useChatCallSignaling } from "@/hooks/useChatCallSignaling"
 import { useChatConversation } from "@/hooks/useChatConversation"
 import { useIncomingCallChannel } from "@/hooks/useIncomingCallChannel"
-import { buildWebRtcSignalPayload, sendIceCandidateSignal } from "@/lib/calls/webrtcSignaling"
 import { getWebRtcManagerState } from "@/lib/calls/webrtc"
 import { clearIncomingCallState, getIncomingCallAction, getIncomingCallState } from "@/lib/calls/callState"
 import { theme } from "@/lib/theme"
@@ -80,8 +79,7 @@ export default function ChatScreenIntegrated() {
     currentCallType,
     callChannelRef,
     startMedia,
-    setIncomingCall: async (call) => {
-      if (!call) return
+    onCallInvite: async (call) => {
       await receiveIncomingCall(call, otherName)
     },
     setCurrentCallType,
@@ -116,7 +114,6 @@ export default function ChatScreenIntegrated() {
       await receiveIncomingCall(pendingCall, otherName)
 
       if (pendingAction === "accept") {
-        // Give React one frame to render the incoming state before accepting.
         setTimeout(() => {
           acceptIncomingCall().catch((error) => console.warn("Auto-accept from notification failed", error))
         }, 120)
@@ -135,20 +132,7 @@ export default function ChatScreenIntegrated() {
   }, [acceptIncomingCall, conversationId, loading, otherName, receiveIncomingCall, rejectIncomingCall])
 
   async function handleStartCall(callType: CallType) {
-    const session = await startOutgoingCall(callType)
-    if (!session || !userId) return
-
-    const signalBase = buildWebRtcSignalPayload({
-      callSessionId: session.id,
-      conversationId,
-      fromUserId: userId,
-      callType,
-    })
-
-    await sendIceCandidateSignal(callChannelRef.current, {
-      ...signalBase,
-      candidate: { candidate: "TODO_NATIVE_ICE_CANDIDATE", sdpMid: "0", sdpMLineIndex: 0 },
-    })
+    await startOutgoingCall(callType)
   }
 
   function handleBackToInbox() {
