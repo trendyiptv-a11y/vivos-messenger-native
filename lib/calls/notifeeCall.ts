@@ -88,7 +88,7 @@ export async function displayNotifeeIncomingCall(args: IncomingCallNotificationA
     android: {
       channelId: NOTIFICATION_CHANNELS.calls,
       category: AndroidCategory.CALL,
-      importance: AndroidImportance.HIGH,
+      importance: AndroidImportance.MAX,
       visibility: AndroidVisibility.PUBLIC,
       color: "#C96AA1",
       colorized: true,
