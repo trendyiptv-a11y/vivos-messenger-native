@@ -30,6 +30,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     async function loadProfile() {
       setLoading(true)
+
       const {
         data: { session },
       } = await supabase.auth.getSession()
@@ -49,6 +50,7 @@ export default function ProfileScreen() {
         .maybeSingle()
 
       const profile = (data ?? null) as ProfileRow | null
+
       setName(profile?.name ?? "")
       setAlias(profile?.alias ?? "")
       setEmail(profile?.email ?? session.user.email ?? "")
@@ -60,6 +62,7 @@ export default function ProfileScreen() {
 
   async function saveProfile() {
     if (!userId) return
+
     setSaving(true)
     setMessage("")
 
@@ -106,6 +109,7 @@ export default function ProfileScreen() {
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarText}>{gradientTextSeed(email || name || alias)}</Text>
           </View>
+
           <View style={styles.identityBody}>
             <Text style={styles.identityName}>{name.trim() || "Membru Messenger"}</Text>
             <Text style={styles.identityAlias}>{alias.trim() ? `@${alias.trim()}` : "Fără alias"}</Text>
@@ -115,12 +119,38 @@ export default function ProfileScreen() {
 
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>Actualizează profilul Messenger</Text>
+
           <View style={styles.formFields}>
             <AppInput label="Email" value={email} editable={false} style={styles.readonly} />
-            <AppInput label="Nume afișat în conversații" value={name} onChangeText={setName} placeholder="Numele tău în Messenger" />
-            <AppInput label="Alias scurt" value={alias} onChangeText={setAlias} placeholder="Alias scurt" />
+
+            <AppInput
+              label="Nume afișat în conversații"
+              value={name}
+              onChangeText={setName}
+              placeholder="Numele tău în Messenger"
+            />
+
+            <AppInput
+              label="Alias scurt"
+              value={alias}
+              onChangeText={setAlias}
+              placeholder="Alias scurt"
+            />
+
             {message ? <Text style={styles.message}>{message}</Text> : null}
-            <AppButton title={saving ? "Se salvează..." : "Salvează"} onPress={saveProfile} loading={saving} leftIcon={<Ionicons name="save-outline" size={18} color="white" />} />
+
+            <AppButton
+              title={saving ? "Se salvează..." : "Salvează"}
+              onPress={saveProfile}
+              loading={saving}
+              leftIcon={<Ionicons name="save-outline" size={18} color="white" />}
+            />
+
+            <AppButton
+              title="V2 Call Test"
+              onPress={() => router.push("/call-v2-test")}
+              leftIcon={<Ionicons name="videocam-outline" size={18} color="white" />}
+            />
           </View>
         </View>
       </ScrollView>
