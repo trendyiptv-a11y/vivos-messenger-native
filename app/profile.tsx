@@ -146,11 +146,7 @@ export default function ProfileScreen() {
               leftIcon={<Ionicons name="save-outline" size={18} color="white" />}
             />
 
-            <AppButton
-              title="V2 Call Test"
-              onPress={() => router.push("/call-v2-test")}
-              leftIcon={<Ionicons name="videocam-outline" size={18} color="white" />}
-            />
+            
           </View>
         </View>
       </ScrollView>
