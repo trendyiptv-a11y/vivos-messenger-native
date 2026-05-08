@@ -8,12 +8,26 @@ import { CallType } from "@/types/call"
 type Props = {
   menuOpen: boolean
   setMenuOpen: (value: boolean | ((prev: boolean) => boolean)) => void
+
+  // Păstrat temporar pentru compatibilitate cu app/chat/[id].tsx.
+  // Nu mai este folosit în header, pentru că apelurile vechi sunt dezactivate.
   onStartCall: (callType: CallType) => void
+
   onLogout: () => void
   onOpenMessages: () => void
 }
 
-function MenuRow({ icon, label, danger = false, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; danger?: boolean; onPress: () => void }) {
+function MenuRow({
+  icon,
+  label,
+  danger = false,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap
+  label: string
+  danger?: boolean
+  onPress: () => void
+}) {
   return (
     <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={onPress}>
       <Ionicons name={icon} size={18} color={danger ? "#FCA5A5" : theme.colors.text} />
@@ -22,7 +36,7 @@ function MenuRow({ icon, label, danger = false, onPress }: { icon: keyof typeof 
   )
 }
 
-export function ChatHeaderActions({ menuOpen, setMenuOpen, onStartCall, onLogout, onOpenMessages }: Props) {
+export function ChatHeaderActions({ menuOpen, setMenuOpen, onLogout, onOpenMessages }: Props) {
   function closeMenu() {
     setMenuOpen(false)
   }
@@ -46,12 +60,6 @@ export function ChatHeaderActions({ menuOpen, setMenuOpen, onStartCall, onLogout
 
   return (
     <View style={styles.headerRight}>
-      <HeaderIconButton onPress={() => onStartCall("audio")}>
-        <Ionicons name="call-outline" size={19} color={theme.colors.text} />
-      </HeaderIconButton>
-      <HeaderIconButton onPress={() => onStartCall("video")}>
-        <Ionicons name="videocam-outline" size={19} color={theme.colors.text} />
-      </HeaderIconButton>
       <HeaderIconButton onPress={() => setMenuOpen((prev) => !prev)}>
         <Ionicons name="ellipsis-vertical" size={18} color={theme.colors.text} />
       </HeaderIconButton>
@@ -60,10 +68,17 @@ export function ChatHeaderActions({ menuOpen, setMenuOpen, onStartCall, onLogout
         <Pressable style={styles.backdrop} onPress={closeMenu}>
           <Pressable style={styles.menuCard}>
             <Text style={styles.menuTitle}>Conversație</Text>
+
             <MenuRow icon="chatbubble-outline" label="Mesaje" onPress={handleMessagesPress} />
-            <MenuRow icon="call-outline" label="Apeluri" onPress={() => navigateTo("/calls")} />
+
+            <MenuRow icon="videocam-outline" label="Apeluri V2 active în conversație" onPress={closeMenu} />
+
+            <MenuRow icon="call-outline" label="Istoric apeluri" onPress={() => navigateTo("/calls")} />
+
             <MenuRow icon="person-outline" label="Profil" onPress={() => navigateTo("/profile")} />
+
             <View style={styles.menuDivider} />
+
             <MenuRow icon="log-out-outline" label="Logout" danger onPress={handleLogoutPress} />
           </Pressable>
         </Pressable>
@@ -86,7 +101,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 96,
     right: 18,
-    width: 220,
+    width: 250,
     borderRadius: 24,
     padding: 10,
     backgroundColor: "rgba(15,38,72,0.98)",
