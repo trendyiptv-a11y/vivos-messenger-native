@@ -99,7 +99,12 @@ export function VivosCallV2Panel({ conversationId, userId, remoteUserId, remoteN
         <View style={styles.videoArea}>
           <View style={styles.remoteVideo}>
             {callState.remoteStreamURL ? (
-              <NativeVideoSurface label={remoteName || "Remote"} streamURL={callState.remoteStreamURL} fill />
+              <NativeVideoSurface
+                key={`remote-video-${callState.remoteStreamURL}`}
+                label={remoteName || "Remote"}
+                streamURL={callState.remoteStreamURL}
+                fill
+              />
             ) : (
               <View style={styles.emptyVideo}>
                 <Ionicons name="videocam-outline" size={34} color="rgba(255,255,255,0.55)" />
@@ -112,7 +117,13 @@ export function VivosCallV2Panel({ conversationId, userId, remoteUserId, remoteN
 
           <View style={styles.localPreview}>
             {callState.localStreamURL ? (
-              <NativeVideoSurface label="Tu" streamURL={callState.localStreamURL} fill />
+              <NativeVideoSurface
+                key={`local-preview-${callState.localStreamURL}`}
+                label="Tu"
+                streamURL={callState.localStreamURL}
+                fill
+                compact
+              />
             ) : (
               <View style={styles.localPreviewEmpty}>
                 <Ionicons name="person-outline" size={20} color="white" />
