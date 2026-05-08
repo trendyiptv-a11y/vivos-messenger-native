@@ -44,6 +44,13 @@ import {
   sendVivosWebRtcAnswer,
   sendVivosWebRtcOffer,
 } from "@/lib/calls-v2/signaling"
+import {
+  getVivosAudioRouteSnapshot,
+  startVivosAudioRoute,
+  stopVivosAudioRoute,
+  subscribeVivosAudioRoute,
+  toggleVivosSpeaker,
+} from "@/lib/calls-v2/audioRoute"
 
 type UseVivosCallV2Args = {
   conversationId: string
@@ -76,6 +83,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
   const refreshSnapshots = useCallback(() => {
     const media = getMediaSnapshot()
     const peer = getVivosPeerSnapshot()
+    const audioRoute = getVivosAudioRouteSnapshot()
 
     setCallState((current) => {
       let next = current
@@ -86,6 +94,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
         localStreamURL: media.localStreamURL,
         microphoneEnabled: media.microphoneEnabled,
         cameraEnabled: media.cameraEnabled,
+        speakerEnabled: audioRoute.speakerEnabled,
       }
 
       next = setRemoteStreamState(next, peer.remoteStreamURL)
@@ -100,7 +109,11 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
 
       return {
         ...next,
-        diagnostics: [...next.diagnostics.slice(-10), ...peer.diagnostics.slice(-8)].slice(-18),
+        diagnostics: [
+          ...next.diagnostics.slice(-8),
+          ...peer.diagnostics.slice(-6),
+          ...audioRoute.diagnostics.slice(-4),
+        ].slice(-18),
       }
     })
 
@@ -131,6 +144,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
     async (callType: VivosCallType) => {
       const media = await startLocalMedia(callType)
       await createVivosPeerConnection(callType)
+      const audioRoute = await startVivosAudioRoute(callType)
 
       setVivosLocalIceHandler(async (candidate) => {
         await sendIceForCurrentCall(candidate)
@@ -142,7 +156,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
           ...next,
           microphoneEnabled: media.audioTracks > 0,
           cameraEnabled: media.videoTracks > 0,
-          speakerEnabled: callType === "video",
+          speakerEnabled: audioRoute.speakerEnabled,
         }
         return next
       })
@@ -156,6 +170,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
   const cleanupMediaAndPeer = useCallback(async () => {
     setVivosLocalIceHandler(null)
     pendingRemoteIceRef.current = []
+    await stopVivosAudioRoute()
     await closeVivosPeerConnection()
     await stopLocalMedia()
     currentCallRef.current = {
@@ -337,6 +352,16 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
   }, [callState.status, refreshSnapshots])
 
   useEffect(() => {
+    return subscribeVivosAudioRoute((audioRoute) => {
+      setCallState((state) => ({
+        ...state,
+        speakerEnabled: audioRoute.speakerEnabled,
+        diagnostics: [...state.diagnostics.slice(-14), ...audioRoute.diagnostics.slice(-4)].slice(-18),
+      }))
+    })
+  }, [])
+
+  useEffect(() => {
     return () => {
       cleanupMediaAndPeer().catch((error) => {
         console.warn("V2 cleanup on unmount failed", error)
@@ -498,6 +523,18 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
     return switched
   }, [refreshSnapshots])
 
+  const toggleSpeaker = useCallback(async () => {
+    const audioRoute = await toggleVivosSpeaker()
+
+    setCallState((state) => ({
+      ...state,
+      speakerEnabled: audioRoute.speakerEnabled,
+      diagnostics: [...state.diagnostics.slice(-14), ...audioRoute.diagnostics.slice(-4)].slice(-18),
+    }))
+
+    return audioRoute.speakerEnabled
+  }, [])
+
   const reset = useCallback(async () => {
     await cleanupMediaAndPeer()
     setCallState(createIdleCallState())
@@ -513,6 +550,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
     toggleMicrophone,
     toggleCamera,
     switchLocalCamera,
+    toggleSpeaker,
     refreshSnapshots,
   }
 }
