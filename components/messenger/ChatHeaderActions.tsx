@@ -3,16 +3,10 @@ import { Ionicons } from "@expo/vector-icons"
 import { router } from "expo-router"
 import { HeaderIconButton } from "@/components/ui/ScreenHeader"
 import { theme } from "@/lib/theme"
-import { CallType } from "@/types/call"
 
 type Props = {
   menuOpen: boolean
   setMenuOpen: (value: boolean | ((prev: boolean) => boolean)) => void
-
-  // Păstrat temporar pentru compatibilitate cu app/chat/[id].tsx.
-  // Nu mai este folosit în header, pentru că apelurile vechi sunt dezactivate.
-  onStartCall: (callType: CallType) => void
-
   onLogout: () => void
   onOpenMessages: () => void
 }
