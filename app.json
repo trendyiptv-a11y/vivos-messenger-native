@@ -38,7 +38,9 @@
         "android.permission.VIBRATE",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.USE_FULL_SCREEN_INTENT",
-        "android.permission.WAKE_LOCK"
+        "android.permission.WAKE_LOCK", 
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_CONNECT"
       ]
     },
     "plugins": [
