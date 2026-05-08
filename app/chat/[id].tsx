@@ -1,31 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useState } from "react"
 import { KeyboardAvoidingView, Platform, StyleSheet, ScrollView, View } from "react-native"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
-import { RealtimeChannel } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
 import { AppShell } from "@/components/ui/AppShell"
 import { ScreenHeader, HeaderIconButton } from "@/components/ui/ScreenHeader"
-import { CallOverlay } from "@/components/messenger/CallOverlay"
 import { ChatHeaderActions } from "@/components/messenger/ChatHeaderActions"
 import { ChatInputBar } from "@/components/messenger/ChatInputBar"
 import { MessageBubbleList } from "@/components/messenger/MessageBubbleList"
 import { VivosCallV2Panel } from "@/components/calls-v2/VivosCallV2Panel"
-import { useChatCallFlow } from "@/hooks/useChatCallFlow"
-import { useChatCallSignaling } from "@/hooks/useChatCallSignaling"
 import { useChatConversation } from "@/hooks/useChatConversation"
-import { useIncomingCallChannel } from "@/hooks/useIncomingCallChannel"
-import { getWebRtcManagerState } from "@/lib/calls/webrtc"
-import { clearIncomingCallState, getIncomingCallAction, getIncomingCallState } from "@/lib/calls/callState"
 import { theme } from "@/lib/theme"
-import { CallType } from "@/types/call"
 
 export default function ChatScreenIntegrated() {
   const router = useRouter()
   const params = useLocalSearchParams<{ id: string }>()
   const conversationId = String(params.id || "")
-  const callChannelRef = useRef<RealtimeChannel | null>(null)
-  const handledPendingCallRef = useRef<string | null>(null)
 
   const {
     scrollRef,
@@ -33,7 +23,6 @@ export default function ChatScreenIntegrated() {
     sending,
     userId,
     messages,
-    members,
     body,
     setBody,
     otherMember,
@@ -42,99 +31,6 @@ export default function ChatScreenIntegrated() {
   } = useChatConversation(conversationId)
 
   const [menuOpen, setMenuOpen] = useState(false)
-
-  const selfName = useMemo(() => {
-    const self = members.find((member) => member.member_id === userId)
-    return self?.name?.trim() || self?.alias?.trim() || self?.email?.trim() || "VIVOS"
-  }, [members, userId])
-
-  const {
-    callUiState,
-    currentCallType,
-    callBusy,
-    currentCallSessionId,
-    webrtcStatus,
-    mediaReady,
-    startMedia,
-    receiveIncomingCall,
-    setCurrentCallType,
-    setCallUiState,
-    setWebrtcStatus,
-    startOutgoingCall,
-    acceptIncomingCall,
-    rejectIncomingCall,
-    stopCurrentCall,
-    resetCallFlow,
-  } = useChatCallFlow({
-    conversationId,
-    userId,
-    calleeId: otherMember?.member_id ?? null,
-    callerName: selfName,
-    callChannelRef,
-  })
-
-  useChatCallSignaling({
-    conversationId,
-    userId,
-    currentCallSessionId,
-    currentCallType,
-    callChannelRef,
-    startMedia,
-    onCallInvite: async (call) => {
-      await receiveIncomingCall(call, otherName)
-    },
-    setCurrentCallType,
-    setCallUiState,
-    setWebrtcStatus,
-    resetCallFlow,
-  })
-
-  useIncomingCallChannel({
-    userId,
-    onIncomingCall: async (call) => {
-      if (call.conversationId !== conversationId) return
-      await receiveIncomingCall(call, otherName)
-    },
-    onCallEnded: async (callSessionId) => {
-      if (currentCallSessionId && callSessionId !== currentCallSessionId) return
-      await resetCallFlow("Închis")
-    },
-  })
-
-  useEffect(() => {
-    if (!conversationId || loading) return
-
-    const pendingCall = getIncomingCallState()
-    if (!pendingCall || pendingCall.conversationId !== conversationId) return
-    if (handledPendingCallRef.current === pendingCall.callSessionId) return
-
-    handledPendingCallRef.current = pendingCall.callSessionId
-    const pendingAction = getIncomingCallAction()
-
-    async function applyPendingIncomingCall() {
-      await receiveIncomingCall(pendingCall, otherName)
-
-      if (pendingAction === "accept") {
-        setTimeout(() => {
-          acceptIncomingCall().catch((error) => console.warn("Auto-accept from notification failed", error))
-        }, 120)
-      }
-
-      if (pendingAction === "reject") {
-        setTimeout(() => {
-          rejectIncomingCall().catch((error) => console.warn("Auto-reject from notification failed", error))
-        }, 120)
-      }
-
-      clearIncomingCallState()
-    }
-
-    applyPendingIncomingCall().catch((error) => console.warn("Pending incoming call handling failed", error))
-  }, [acceptIncomingCall, conversationId, loading, otherName, receiveIncomingCall, rejectIncomingCall])
-
-  async function handleStartCall(callType: CallType) {
-    await startOutgoingCall(callType)
-  }
 
   function handleBackToInbox() {
     setMenuOpen(false)
@@ -152,8 +48,6 @@ export default function ChatScreenIntegrated() {
     router.replace("/login")
   }
 
-  const currentWebRtcState = getWebRtcManagerState()
-
   return (
     <AppShell padded={false}>
       <ScreenHeader
@@ -167,7 +61,6 @@ export default function ChatScreenIntegrated() {
           <ChatHeaderActions
             menuOpen={menuOpen}
             setMenuOpen={setMenuOpen}
-            onStartCall={handleStartCall}
             onLogout={handleLogout}
             onOpenMessages={handleBackToInbox}
           />
@@ -195,20 +88,6 @@ export default function ChatScreenIntegrated() {
 
         <ChatInputBar value={body} onChangeText={setBody} onSend={handleSend} sending={sending} />
       </KeyboardAvoidingView>
-
-      <CallOverlay
-        visible={callUiState !== "idle"}
-        otherName={otherName}
-        callUiState={callUiState}
-        currentCallType={currentCallType}
-        mediaReady={mediaReady}
-        webrtcStatus={webrtcStatus}
-        currentWebRtcState={currentWebRtcState}
-        callBusy={callBusy}
-        onAccept={acceptIncomingCall}
-        onReject={rejectIncomingCall}
-        onEnd={stopCurrentCall}
-      />
     </AppShell>
   )
 }
