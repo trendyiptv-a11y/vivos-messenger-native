@@ -71,8 +71,6 @@ export function ChatHeaderActions({ menuOpen, setMenuOpen, onLogout, onOpenMessa
 
             <MenuRow icon="chatbubble-outline" label="Mesaje" onPress={handleMessagesPress} />
 
-            <MenuRow icon="videocam-outline" label="Apeluri V2 active în conversație" onPress={closeMenu} />
-
             <MenuRow icon="call-outline" label="Istoric apeluri" onPress={() => navigateTo("/calls")} />
 
             <MenuRow icon="person-outline" label="Profil" onPress={() => navigateTo("/profile")} />
