@@ -90,6 +90,14 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
 
       next = setRemoteStreamState(next, peer.remoteStreamURL)
 
+      const peerFailed =
+        peer.connectionState === "failed" ||
+        peer.iceConnectionState === "failed"
+
+      if (peerFailed && next.status !== "failed") {
+        next = failCallState(next, "Conexiunea WebRTC/ICE a eșuat")
+      }
+
       return {
         ...next,
         diagnostics: [...next.diagnostics.slice(-10), ...peer.diagnostics.slice(-8)].slice(-18),
@@ -339,6 +347,9 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
   const startCall = useCallback(
     async (callType: VivosCallType) => {
       if (!userId || !remoteUserId || !conversationId) return false
+
+      await cleanupMediaAndPeer()
+      setCallState(createIdleCallState())
 
       const callSessionId = createCallSessionId()
 
