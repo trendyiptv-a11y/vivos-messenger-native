@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Pressable, StyleSheet, Text, View } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import { useVivosCallV2 } from "@/lib/calls-v2/useVivosCallV2"
 import { NativeVideoSurface } from "@/components/messenger/NativeVideoSurface"
@@ -22,7 +22,6 @@ export function VivosCallV2Panel({ conversationId, userId, remoteUserId, remoteN
     toggleCamera,
     toggleSpeaker,
     switchLocalCamera,
-    refreshSnapshots,
   } = useVivosCallV2({
     conversationId,
     userId,
@@ -30,339 +29,445 @@ export function VivosCallV2Panel({ conversationId, userId, remoteUserId, remoteN
     remoteName,
   })
 
-  const inCall =
-    callState.status !== "idle" &&
-    callState.status !== "ended" &&
-    callState.status !== "rejected" &&
-    callState.status !== "failed"
+  const idle =
+    callState.status === "idle" ||
+    callState.status === "ended" ||
+    callState.status === "rejected" ||
+    callState.status === "failed"
 
   const incoming = callState.status === "ringing_incoming"
+  const outgoing = callState.status === "ringing_outgoing"
+  const connecting = callState.status === "connecting"
+  const connected = callState.status === "connected"
+  const videoCall = callState.callType === "video"
+
+  if (idle) {
+    return (
+      <View style={styles.startBar}>
+        <View style={styles.startTextBlock}>
+          <Text style={styles.startTitle}>Apel VIVOS</Text>
+          <Text style={styles.startSubtitle}>{remoteName || "Membru VIVOS"}</Text>
+        </View>
+
+        <View style={styles.startButtons}>
+          <RoundButton icon="call-outline" onPress={() => startCall("audio")} />
+          <RoundButton icon="videocam-outline" onPress={() => startCall("video")} primary />
+        </View>
+      </View>
+    )
+  }
+
+  if (incoming) {
+    return (
+      <View style={styles.callCard}>
+        <View style={styles.incomingHeader}>
+          <View style={styles.avatarCircle}>
+            <Ionicons name={videoCall ? "videocam-outline" : "call-outline"} size={28} color="white" />
+          </View>
+
+          <Text style={styles.callTitle}>
+            {videoCall ? "Apel video primit" : "Apel audio primit"}
+          </Text>
+
+          <Text style={styles.callSubtitle}>{remoteName || "Membru VIVOS"}</Text>
+        </View>
+
+        <View style={styles.incomingActions}>
+          <CallButton icon="close-outline" label="Respinge" onPress={rejectCall} danger />
+          <CallButton icon="call-outline" label="Acceptă" onPress={acceptCall} success />
+        </View>
+      </View>
+    )
+  }
 
   return (
-    <View style={styles.panel}>
-      <View style={styles.header}>
-        <View style={styles.headerIcon}>
-          <Ionicons name="videocam-outline" size={20} color="white" />
+    <View style={styles.callCard}>
+      <View style={styles.callHeader}>
+        <View>
+          <Text style={styles.callTitle}>
+            {connected ? "Apel conectat" : outgoing ? "Se apelează..." : "Se conectează..."}
+          </Text>
+          <Text style={styles.callSubtitle}>{remoteName || "Membru VIVOS"}</Text>
         </View>
 
-        <View style={styles.headerText}>
-          <Text style={styles.title}>VIVOS Call V2</Text>
-          <Text style={styles.subtitle}>{remoteName || "Membru VIVOS"}</Text>
-        </View>
-
-        <Pressable onPress={refreshSnapshots} style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}>
-          <Ionicons name="refresh" size={18} color="white" />
+        <Pressable onPress={reset} style={({ pressed }) => [styles.smallButton, pressed && styles.pressed]}>
+          <Ionicons name="refresh-outline" size={18} color="white" />
         </Pressable>
       </View>
 
-      <View style={styles.statusBox}>
-        <Text style={styles.statusLabel}>Status</Text>
-        <Text style={styles.statusValue}>{callState.status}</Text>
+      {videoCall ? (
+        <View style={styles.videoArea}>
+          <View style={styles.remoteVideo}>
+            {callState.remoteStreamURL ? (
+              <NativeVideoSurface label={remoteName || "Remote"} streamURL={callState.remoteStreamURL} fill />
+            ) : (
+              <View style={styles.emptyVideo}>
+                <Ionicons name="videocam-outline" size={34} color="rgba(255,255,255,0.55)" />
+                <Text style={styles.emptyVideoText}>
+                  {connecting || outgoing ? "Aștept video..." : "Fără video remote"}
+                </Text>
+              </View>
+            )}
+          </View>
 
-        <View style={styles.statusGrid}>
-          <MiniStat label="Local" value={callState.localStreamReady ? "ON" : "OFF"} />
-          <MiniStat label="Remote" value={callState.remoteStreamReady ? "ON" : "OFF"} />
-          <MiniStat label="Mic" value={callState.microphoneEnabled ? "ON" : "OFF"} />
-          <MiniStat label="Cam" value={callState.cameraEnabled ? "ON" : "OFF"} />
+          <View style={styles.localPreview}>
+            {callState.localStreamURL ? (
+              <NativeVideoSurface label="Tu" streamURL={callState.localStreamURL} fill />
+            ) : (
+              <View style={styles.localPreviewEmpty}>
+                <Ionicons name="person-outline" size={20} color="white" />
+              </View>
+            )}
+          </View>
         </View>
-      </View>
-
-      <View style={styles.videoGrid}>
-        <View style={styles.videoCard}>
-          <Text style={styles.videoTitle}>Local</Text>
-          {callState.localStreamURL ? (
-            <NativeVideoSurface label="Tu" streamURL={callState.localStreamURL} fill />
-          ) : (
-            <EmptyVideo label="Fără local stream" icon="person-circle-outline" />
-          )}
+      ) : (
+        <View style={styles.audioArea}>
+          <View style={styles.avatarLarge}>
+            <Ionicons name="person-outline" size={44} color="white" />
+          </View>
+          <Text style={styles.audioName}>{remoteName || "Membru VIVOS"}</Text>
+          <Text style={styles.audioStatus}>
+            {connected ? "Audio conectat" : outgoing ? "Se apelează..." : "Se conectează..."}
+          </Text>
         </View>
-
-        <View style={styles.videoCard}>
-          <Text style={styles.videoTitle}>Remote</Text>
-          {callState.remoteStreamURL ? (
-            <NativeVideoSurface label={remoteName || "Remote"} streamURL={callState.remoteStreamURL} fill />
-          ) : (
-            <EmptyVideo label="Fără remote stream" icon="radio-outline" />
-          )}
-        </View>
-      </View>
+      )}
 
       <View style={styles.controls}>
-        {!inCall ? (
+        <ControlButton
+          icon={callState.microphoneEnabled ? "mic-outline" : "mic-off-outline"}
+          label={callState.microphoneEnabled ? "Mic" : "Mic off"}
+          onPress={toggleMicrophone}
+          active={callState.microphoneEnabled}
+        />
+
+        <ControlButton
+          icon={callState.speakerEnabled ? "volume-high-outline" : "volume-mute-outline"}
+          label={callState.speakerEnabled ? "Speaker" : "Speaker off"}
+          onPress={toggleSpeaker}
+          active={callState.speakerEnabled}
+        />
+
+        {videoCall ? (
           <>
-            <ActionButton icon="call-outline" label="Start audio" onPress={() => startCall("audio")} />
-            <ActionButton icon="videocam-outline" label="Start video" onPress={() => startCall("video")} />
-          </>
-        ) : incoming ? (
-          <>
-            <ActionButton icon="call-outline" label="Acceptă" onPress={acceptCall} success />
-            <ActionButton icon="close-outline" label="Respinge" onPress={rejectCall} danger />
-          </>
-        ) : (
-          <>
-            <ActionButton
-              icon={callState.microphoneEnabled ? "mic-off-outline" : "mic-outline"}
-              label={callState.microphoneEnabled ? "Mic OFF" : "Mic ON"}
-              onPress={toggleMicrophone}
-            />
-            <ActionButton
-              icon={callState.speakerEnabled ? "volume-high-outline" : "volume-mute-outline"}
-              label={callState.speakerEnabled ? "Speaker OFF" : "Speaker ON"}
-              onPress={toggleSpeaker}
-            />
-            <ActionButton
-              icon={callState.cameraEnabled ? "videocam-off-outline" : "videocam-outline"}
-              label={callState.cameraEnabled ? "Cam OFF" : "Cam ON"}
+            <ControlButton
+              icon={callState.cameraEnabled ? "videocam-outline" : "videocam-off-outline"}
+              label={callState.cameraEnabled ? "Camera" : "Cam off"}
               onPress={toggleCamera}
+              active={callState.cameraEnabled}
             />
-            <ActionButton icon="camera-reverse-outline" label="Switch" onPress={switchLocalCamera} />
-            <ActionButton icon="call-outline" label="End" onPress={endCall} danger />
+
+            <ControlButton
+              icon="camera-reverse-outline"
+              label="Switch"
+              onPress={switchLocalCamera}
+              active
+            />
           </>
-        )}
+        ) : null}
 
-        <ActionButton icon="reload-outline" label="Reset" onPress={reset} muted />
+        <ControlButton icon="call-outline" label="End" onPress={endCall} danger />
       </View>
 
-      <View style={styles.diagnosticsBox}>
-        <Text style={styles.diagnosticsTitle}>Diagnostics</Text>
-
-        <ScrollView style={styles.diagnosticsScroll} nestedScrollEnabled>
-          {callState.diagnostics.length ? (
-            callState.diagnostics.slice(-12).map((item, index) => (
-              <Text key={`${item}-${index}`} style={styles.diagnosticLine}>
-                • {item}
-              </Text>
-            ))
-          ) : (
-            <Text style={styles.diagnosticLine}>Niciun diagnostic încă.</Text>
-          )}
-        </ScrollView>
-      </View>
+      {callState.status === "failed" ? (
+        <Text style={styles.errorText}>Apelul a eșuat. Apasă Reset și încearcă din nou.</Text>
+      ) : null}
     </View>
   )
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
+function RoundButton({
+  icon,
+  onPress,
+  primary = false,
+}: {
+  icon: keyof typeof Ionicons.glyphMap
+  onPress: () => void | Promise<void>
+  primary?: boolean
+}) {
   return (
-    <View style={styles.miniStat}>
-      <Text style={styles.miniStatLabel}>{label}</Text>
-      <Text style={styles.miniStatValue}>{value}</Text>
-    </View>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.roundButton,
+        primary && styles.roundButtonPrimary,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Ionicons name={icon} size={22} color="white" />
+    </Pressable>
   )
 }
 
-function EmptyVideo({ label, icon }: { label: string; icon: keyof typeof Ionicons.glyphMap }) {
-  return (
-    <View style={styles.emptyVideo}>
-      <Ionicons name={icon} size={30} color="rgba(255,255,255,0.55)" />
-      <Text style={styles.emptyVideoText}>{label}</Text>
-    </View>
-  )
-}
-
-function ActionButton({
+function CallButton({
   icon,
   label,
   onPress,
   danger = false,
   success = false,
-  muted = false,
 }: {
   icon: keyof typeof Ionicons.glyphMap
   label: string
   onPress: () => void | Promise<void>
   danger?: boolean
   success?: boolean
-  muted?: boolean
 }) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
-        styles.actionButton,
-        danger && styles.actionDanger,
-        success && styles.actionSuccess,
-        muted && styles.actionMuted,
+        styles.callButton,
+        danger && styles.buttonDanger,
+        success && styles.buttonSuccess,
         pressed && styles.pressed,
       ]}
     >
-      <Ionicons name={icon} size={19} color="white" />
-      <Text style={styles.actionText}>{label}</Text>
+      <Ionicons name={icon} size={24} color="white" />
+      <Text style={styles.callButtonText}>{label}</Text>
+    </Pressable>
+  )
+}
+
+function ControlButton({
+  icon,
+  label,
+  onPress,
+  active = false,
+  danger = false,
+}: {
+  icon: keyof typeof Ionicons.glyphMap
+  label: string
+  onPress: () => void | Promise<void>
+  active?: boolean
+  danger?: boolean
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.controlButton,
+        active && styles.controlButtonActive,
+        danger && styles.controlButtonDanger,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Ionicons name={icon} size={20} color="white" />
+      <Text style={styles.controlText}>{label}</Text>
     </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
-  panel: {
+  startBar: {
     marginHorizontal: 14,
     marginVertical: 10,
-    borderRadius: 26,
+    borderRadius: 24,
     padding: 14,
-    backgroundColor: "rgba(8,12,24,0.96)",
+    backgroundColor: "rgba(8,12,24,0.94)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    gap: 12,
-  },
-  header: {
+    borderColor: "rgba(255,255,255,0.12)",
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
   },
-  headerIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#2563EB",
-  },
-  headerText: {
+  startTextBlock: {
     flex: 1,
   },
-  title: {
+  startTitle: {
     color: "white",
     fontSize: 17,
     fontWeight: "900",
   },
-  subtitle: {
-    color: "rgba(255,255,255,0.68)",
+  startSubtitle: {
+    color: "rgba(255,255,255,0.62)",
     fontSize: 13,
     marginTop: 2,
   },
+  startButtons: {
+    flexDirection: "row",
+    gap: 10,
+  },
   roundButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.14)",
+  },
+  roundButtonPrimary: {
+    backgroundColor: "#2563EB",
+  },
+  callCard: {
+    marginHorizontal: 14,
+    marginVertical: 10,
+    borderRadius: 28,
+    padding: 14,
+    backgroundColor: "rgba(8,12,24,0.97)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    gap: 14,
+  },
+  callHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  callTitle: {
+    color: "white",
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  callSubtitle: {
+    color: "rgba(255,255,255,0.65)",
+    fontSize: 14,
+    marginTop: 3,
+    textAlign: "center",
+  },
+  smallButton: {
     width: 38,
     height: 38,
     borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.13)",
   },
-  statusBox: {
-    borderRadius: 18,
-    padding: 12,
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  statusLabel: {
-    color: "rgba(255,255,255,0.58)",
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  statusValue: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "900",
-    marginTop: 2,
-  },
-  statusGrid: {
-    flexDirection: "row",
+  incomingHeader: {
+    alignItems: "center",
     gap: 8,
-    marginTop: 10,
-  },
-  miniStat: {
-    flex: 1,
-    borderRadius: 12,
     paddingVertical: 8,
-    paddingHorizontal: 8,
-    backgroundColor: "rgba(0,0,0,0.24)",
   },
-  miniStatLabel: {
-    color: "rgba(255,255,255,0.52)",
-    fontSize: 10,
-    fontWeight: "800",
+  avatarCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2563EB",
   },
-  miniStatValue: {
+  incomingActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  callButton: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: "rgba(255,255,255,0.14)",
+  },
+  buttonDanger: {
+    backgroundColor: "#EF4444",
+  },
+  buttonSuccess: {
+    backgroundColor: "#22C55E",
+  },
+  callButtonText: {
     color: "white",
     fontSize: 13,
     fontWeight: "900",
-    marginTop: 2,
   },
-  videoGrid: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  videoCard: {
-    flex: 1,
-    height: 170,
-    borderRadius: 18,
+  videoArea: {
+    height: 320,
+    borderRadius: 24,
     overflow: "hidden",
     backgroundColor: "#02030A",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
-  videoTitle: {
+  remoteVideo: {
+    flex: 1,
+  },
+  localPreview: {
     position: "absolute",
-    left: 8,
-    top: 8,
-    zIndex: 2,
-    color: "white",
-    fontSize: 11,
-    fontWeight: "900",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.50)",
+    right: 12,
+    top: 12,
+    width: 104,
+    height: 140,
+    borderRadius: 18,
+    overflow: "hidden",
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+  },
+  localPreviewEmpty: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyVideo: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    padding: 10,
   },
   emptyVideoText: {
-    color: "rgba(255,255,255,0.64)",
-    fontSize: 12,
+    color: "rgba(255,255,255,0.65)",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  audioArea: {
+    minHeight: 230,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.07)",
+  },
+  avatarLarge: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2563EB",
+  },
+  audioName: {
+    color: "white",
+    fontSize: 22,
+    fontWeight: "900",
+  },
+  audioStatus: {
+    color: "rgba(255,255,255,0.62)",
+    fontSize: 14,
     fontWeight: "700",
-    textAlign: "center",
   },
   controls: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+    justifyContent: "center",
   },
-  actionButton: {
+  controlButton: {
     minWidth: "30%",
     flexGrow: 1,
-    minHeight: 48,
-    borderRadius: 15,
+    minHeight: 50,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
+    backgroundColor: "rgba(255,255,255,0.13)",
+  },
+  controlButtonActive: {
     backgroundColor: "#2563EB",
   },
-  actionDanger: {
+  controlButtonDanger: {
     backgroundColor: "#EF4444",
   },
-  actionSuccess: {
-    backgroundColor: "#22C55E",
-  },
-  actionMuted: {
-    backgroundColor: "rgba(255,255,255,0.16)",
-  },
-  actionText: {
+  controlText: {
     color: "white",
     fontSize: 11,
     fontWeight: "900",
+    textAlign: "center",
   },
-  diagnosticsBox: {
-    borderRadius: 18,
-    padding: 12,
-    backgroundColor: "rgba(255,255,255,0.06)",
-  },
-  diagnosticsTitle: {
-    color: "white",
+  errorText: {
+    color: "#FCA5A5",
     fontSize: 13,
-    fontWeight: "900",
-    marginBottom: 6,
-  },
-  diagnosticsScroll: {
-    maxHeight: 120,
-  },
-  diagnosticLine: {
-    color: "rgba(255,255,255,0.68)",
-    fontSize: 11,
-    lineHeight: 16,
+    fontWeight: "700",
+    textAlign: "center",
   },
   pressed: {
     opacity: 0.78,
