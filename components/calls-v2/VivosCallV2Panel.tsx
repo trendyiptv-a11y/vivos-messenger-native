@@ -20,6 +20,7 @@ export function VivosCallV2Panel({ conversationId, userId, remoteUserId, remoteN
     reset,
     toggleMicrophone,
     toggleCamera,
+    toggleSpeaker,
     switchLocalCamera,
     refreshSnapshots,
   } = useVivosCallV2({
@@ -103,6 +104,11 @@ export function VivosCallV2Panel({ conversationId, userId, remoteUserId, remoteN
               icon={callState.microphoneEnabled ? "mic-off-outline" : "mic-outline"}
               label={callState.microphoneEnabled ? "Mic OFF" : "Mic ON"}
               onPress={toggleMicrophone}
+            />
+            <ActionButton
+              icon={callState.speakerEnabled ? "volume-high-outline" : "volume-mute-outline"}
+              label={callState.speakerEnabled ? "Speaker OFF" : "Speaker ON"}
+              onPress={toggleSpeaker}
             />
             <ActionButton
               icon={callState.cameraEnabled ? "videocam-off-outline" : "videocam-outline"}
