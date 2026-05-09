@@ -7,6 +7,8 @@ import { theme } from "@/lib/theme"
 type Props = {
   menuOpen: boolean
   setMenuOpen: (value: boolean | ((prev: boolean) => boolean)) => void
+  onStartAudio: () => void | Promise<void>
+  onStartVideo: () => void | Promise<void>
   onLogout: () => void
   onOpenMessages: () => void
 }
@@ -30,7 +32,14 @@ function MenuRow({
   )
 }
 
-export function ChatHeaderActions({ menuOpen, setMenuOpen, onLogout, onOpenMessages }: Props) {
+export function ChatHeaderActions({
+  menuOpen,
+  setMenuOpen,
+  onStartAudio,
+  onStartVideo,
+  onLogout,
+  onOpenMessages,
+}: Props) {
   function closeMenu() {
     setMenuOpen(false)
   }
@@ -52,8 +61,26 @@ export function ChatHeaderActions({ menuOpen, setMenuOpen, onLogout, onOpenMessa
     setTimeout(onLogout, 80)
   }
 
+  function handleStartAudio() {
+    closeMenu()
+    void onStartAudio()
+  }
+
+  function handleStartVideo() {
+    closeMenu()
+    void onStartVideo()
+  }
+
   return (
     <View style={styles.headerRight}>
+      <HeaderIconButton onPress={handleStartAudio}>
+        <Ionicons name="call-outline" size={18} color={theme.colors.text} />
+      </HeaderIconButton>
+
+      <HeaderIconButton onPress={handleStartVideo}>
+        <Ionicons name="videocam-outline" size={19} color={theme.colors.text} />
+      </HeaderIconButton>
+
       <HeaderIconButton onPress={() => setMenuOpen((prev) => !prev)}>
         <Ionicons name="ellipsis-vertical" size={18} color={theme.colors.text} />
       </HeaderIconButton>
