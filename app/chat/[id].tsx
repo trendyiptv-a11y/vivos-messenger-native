@@ -8,8 +8,9 @@ import { ScreenHeader, HeaderIconButton } from "@/components/ui/ScreenHeader"
 import { ChatHeaderActions } from "@/components/messenger/ChatHeaderActions"
 import { ChatInputBar } from "@/components/messenger/ChatInputBar"
 import { MessageBubbleList } from "@/components/messenger/MessageBubbleList"
-import { VivosCallV2Panel } from "@/components/calls-v2/VivosCallV2Panel"
+import { VivosCallV2Overlay } from "@/components/calls-v2/VivosCallV2Overlay"
 import { useChatConversation } from "@/hooks/useChatConversation"
+import { useVivosCallV2 } from "@/lib/calls-v2/useVivosCallV2"
 import { theme } from "@/lib/theme"
 
 export default function ChatScreenIntegrated() {
@@ -29,6 +30,24 @@ export default function ChatScreenIntegrated() {
     otherName,
     handleSend,
   } = useChatConversation(conversationId)
+
+  const {
+    callState,
+    startCall,
+    acceptCall,
+    rejectCall,
+    endCall,
+    reset,
+    toggleMicrophone,
+    toggleCamera,
+    toggleSpeaker,
+    switchLocalCamera,
+  } = useVivosCallV2({
+    conversationId,
+    userId,
+    remoteUserId: otherMember?.member_id ?? null,
+    remoteName: otherName,
+  })
 
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -50,49 +69,63 @@ export default function ChatScreenIntegrated() {
 
   return (
     <AppShell padded={false}>
-      <ScreenHeader
-        title={otherName}
-        left={
-          <HeaderIconButton onPress={handleBackToInbox}>
-            <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
-          </HeaderIconButton>
-        }
-        right={
-          <ChatHeaderActions
-            menuOpen={menuOpen}
-            setMenuOpen={setMenuOpen}
-            onLogout={handleLogout}
-            onOpenMessages={handleBackToInbox}
-          />
-        }
-      />
+      <View style={styles.screen}>
+        <ScreenHeader
+          title={otherName}
+          left={
+            <HeaderIconButton onPress={handleBackToInbox}>
+              <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
+            </HeaderIconButton>
+          }
+          right={
+            <ChatHeaderActions
+              menuOpen={menuOpen}
+              setMenuOpen={setMenuOpen}
+              onStartAudio={() => startCall("audio")}
+              onStartVideo={() => startCall("video")}
+              onLogout={handleLogout}
+              onOpenMessages={handleBackToInbox}
+            />
+          }
+        />
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <VivosCallV2Panel
-            conversationId={conversationId}
-            userId={userId}
-            remoteUserId={otherMember?.member_id ?? null}
-            remoteName={otherName}
-          />
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <ScrollView
+            style={styles.flex}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.messagesWrap}>
+              <MessageBubbleList scrollRef={scrollRef} loading={loading} messages={messages} userId={userId} />
+            </View>
+          </ScrollView>
 
-          <View style={styles.messagesWrap}>
-            <MessageBubbleList scrollRef={scrollRef} loading={loading} messages={messages} userId={userId} />
-          </View>
-        </ScrollView>
+          <ChatInputBar value={body} onChangeText={setBody} onSend={handleSend} sending={sending} />
+        </KeyboardAvoidingView>
 
-        <ChatInputBar value={body} onChangeText={setBody} onSend={handleSend} sending={sending} />
-      </KeyboardAvoidingView>
+        <VivosCallV2Overlay
+          callState={callState}
+          remoteName={otherName}
+          onAccept={acceptCall}
+          onReject={rejectCall}
+          onEnd={endCall}
+          onReset={reset}
+          onToggleMicrophone={toggleMicrophone}
+          onToggleCamera={toggleCamera}
+          onToggleSpeaker={toggleSpeaker}
+          onSwitchCamera={switchLocalCamera}
+        />
+      </View>
     </AppShell>
   )
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    position: "relative",
+  },
   flex: {
     flex: 1,
   },
