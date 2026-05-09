@@ -12,6 +12,7 @@ import { VivosCallV2Overlay } from "@/components/calls-v2/VivosCallV2Overlay"
 import { useChatConversation } from "@/hooks/useChatConversation"
 import { useVivosCallV2 } from "@/lib/calls-v2/useVivosCallV2"
 import { theme } from "@/lib/theme"
+import { unregisterPushToken } from "@/lib/notifications"
 
 export default function ChatScreenIntegrated() {
   const router = useRouter()
@@ -63,6 +64,7 @@ export default function ChatScreenIntegrated() {
   }
 
   async function handleLogout() {
+    await unregisterPushToken()
     await supabase.auth.signOut()
     router.replace("/login")
   }
