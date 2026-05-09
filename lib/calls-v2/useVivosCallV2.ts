@@ -51,6 +51,7 @@ import {
   subscribeVivosAudioRoute,
   toggleVivosSpeaker,
 } from "@/lib/calls-v2/audioRoute"
+import { notifyVivosCallV2 } from "@/lib/calls-v2/callNotify"
 
 type UseVivosCallV2Args = {
   conversationId: string
@@ -403,6 +404,15 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
           fromUserId: userId,
           toUserId: remoteUserId,
           callType,
+        })
+
+        void notifyVivosCallV2({
+          conversationId,
+          callSessionId,
+          fromUserId: userId,
+          toUserId: remoteUserId,
+          callType,
+          callerName: "VIVOS",
         })
 
         setCallState((state) => setCallStatus(state, "ringing_outgoing", "Invite trimis"))
