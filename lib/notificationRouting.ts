@@ -4,6 +4,10 @@ import { NOTIFICATION_ACTIONS } from "@/lib/notifications"
 import { setIncomingCallState } from "@/lib/calls/callState"
 import { startCallRingtone, stopCallRingtone } from "@/lib/calls/callRingtone"
 import { IncomingCall } from "@/types/call"
+import {
+  setPendingVivosCallFromNotification,
+  VivosCallNotificationAction,
+} from "@/lib/calls-v2/callNotificationState"
 
 type NotificationData = {
   kind?: unknown
@@ -25,12 +29,42 @@ function getNotificationData(response: Notifications.NotificationResponse): Noti
   return (response.notification.request.content.data ?? {}) as NotificationData
 }
 
+function getNotificationAction(response: Notifications.NotificationResponse): VivosCallNotificationAction {
+  return response.actionIdentifier === NOTIFICATION_ACTIONS.acceptCall
+    ? "accept"
+    : response.actionIdentifier === NOTIFICATION_ACTIONS.rejectCall
+      ? "reject"
+      : "open"
+}
+
 export function routeNotificationResponse(router: Router, response: Notifications.NotificationResponse) {
   const data = getNotificationData(response)
   const kind = asString(data.kind) || asString(data.type)
   const conversationId = asString(data.conversationId)
 
   if (!conversationId) return
+
+  if (kind === "incoming_call_v2" || kind === "call_v2") {
+    void stopCallRingtone()
+
+    const callSessionId = asString(data.callSessionId)
+    const fromUserId = asString(data.fromUserId) || asString(data.callerUserId)
+
+    if (callSessionId && fromUserId) {
+      setPendingVivosCallFromNotification(
+        {
+          conversationId,
+          callSessionId,
+          fromUserId,
+          callType: data.callType === "video" ? "video" : "audio",
+        },
+        getNotificationAction(response)
+      )
+    }
+
+    router.push({ pathname: "/chat/[id]", params: { id: conversationId } })
+    return
+  }
 
   if (kind === "incoming_call") {
     void stopCallRingtone()
@@ -67,7 +101,7 @@ export function routeForegroundNotification(notification: Notifications.Notifica
   const data = (notification.request.content.data ?? {}) as NotificationData
   const kind = asString(data.kind) || asString(data.type)
 
-  if (kind !== "incoming_call") return
+  if (kind !== "incoming_call" && kind !== "incoming_call_v2" && kind !== "call_v2") return
 
   void startCallRingtone({
     callSessionId: asString(data.callSessionId),
