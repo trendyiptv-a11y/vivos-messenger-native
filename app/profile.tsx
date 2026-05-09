@@ -9,6 +9,7 @@ import { AppButton } from "@/components/ui/AppButton"
 import { BottomTabBar } from "@/components/ui/BottomTabBar"
 import { supabase } from "@/lib/supabase"
 import { gradientTextSeed, theme } from "@/lib/theme"
+import { unregisterPushToken } from "@/lib/notifications"
 
 type ProfileRow = {
   id: string
@@ -88,6 +89,7 @@ export default function ProfileScreen() {
   }
 
   async function handleLogout() {
+    await unregisterPushToken()
     await supabase.auth.signOut()
     router.replace("/login")
   }
@@ -145,8 +147,6 @@ export default function ProfileScreen() {
               loading={saving}
               leftIcon={<Ionicons name="save-outline" size={18} color="white" />}
             />
-
-            
           </View>
         </View>
       </ScrollView>
