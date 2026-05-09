@@ -7,8 +7,11 @@ import { AppErrorBoundary } from "@/components/system/AppErrorBoundary"
 import { useAuthSession } from "@/hooks/useAuthSession"
 import { clearNativeBadge, requestNotificationPermissions } from "@/lib/notifications"
 import { routeForegroundNotification, routeNotificationResponse } from "@/lib/notificationRouting"
-import { registerNotifeeCallEvents, setupNotifeeCallChannel } from "@/lib/calls/notifeeCall"
-import { stopCallRingtone } from "@/lib/calls/callRingtone"
+import {
+  registerVivosCallV2NotifeeEvents,
+  setupVivosCallV2NotificationChannel,
+} from "@/lib/calls-v2/notifeeCallV2"
+import { stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
 import { theme } from "@/lib/theme"
 
 export default function RootLayout() {
@@ -19,10 +22,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (loading) return
+
     const inAuthGroup = ["login", "signup"].includes(String(segments[0] || ""))
+
     if (!isAuthenticated && !inAuthGroup) {
       router.replace("/login")
     }
+
     if (isAuthenticated && inAuthGroup) {
       router.replace("/inbox")
     }
@@ -30,13 +36,15 @@ export default function RootLayout() {
 
   useEffect(() => {
     requestNotificationPermissions()
-    setupNotifeeCallChannel()
+    setupVivosCallV2NotificationChannel()
     clearNativeBadge()
+
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         clearNativeBadge()
       }
     })
+
     return () => subscription.remove()
   }, [])
 
@@ -45,13 +53,15 @@ export default function RootLayout() {
 
     Notifications.getLastNotificationResponseAsync().then((lastResponse) => {
       if (!lastResponse) return
+
       const id = lastResponse.notification.request.identifier
       if (processedNotifIds.current.has(id)) return
+
       processedNotifIds.current.add(id)
       routeNotificationResponse(router, lastResponse)
     })
 
-    const notifeeUnsubscribe = registerNotifeeCallEvents((conversationId) => {
+    const notifeeUnsubscribe = registerVivosCallV2NotifeeEvents((conversationId) => {
       router.push({ pathname: "/chat/[id]", params: { id: conversationId } })
     })
 
@@ -62,6 +72,7 @@ export default function RootLayout() {
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const id = response.notification.request.identifier
       if (processedNotifIds.current.has(id)) return
+
       processedNotifIds.current.add(id)
       routeNotificationResponse(router, response)
     })
@@ -70,7 +81,7 @@ export default function RootLayout() {
       notifeeUnsubscribe()
       receivedSubscription.remove()
       responseSubscription.remove()
-      void stopCallRingtone()
+      void stopVivosCallV2Ringtone()
     }
   }, [isAuthenticated, loading, router])
 
