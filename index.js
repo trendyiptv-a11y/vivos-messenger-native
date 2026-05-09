@@ -1,6 +1,6 @@
 import "event-target-shim"
-import { registerNotifeeBackgroundHandler } from "./lib/nativeIncomingCall"
+import { registerVivosCallV2NotifeeBackgroundHandler } from "./lib/calls-v2/notifeeCallV2"
 
-registerNotifeeBackgroundHandler()
+registerVivosCallV2NotifeeBackgroundHandler()
 
 import "expo-router/entry"
