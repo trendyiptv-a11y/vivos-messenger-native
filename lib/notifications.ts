@@ -241,3 +241,59 @@ export async function showLocalIncomingCallNotification(callerName: string, call
       : { seconds: 1 },
   })
 }
+
+export async function unregisterPushToken() {
+  try {
+    const accessToken = await getAccessToken()
+
+    if (!accessToken) {
+      return { ok: false, reason: "missing-access-token" }
+    }
+
+    const projectId = getProjectId()
+    let token: string | null = null
+
+    if (projectId) {
+      try {
+        const tokenResult = await Notifications.getExpoPushTokenAsync({ projectId })
+        token = tokenResult.data ?? null
+      } catch (error) {
+        console.warn("Could not read Expo push token before unregister", error)
+      }
+    }
+
+    const response = await fetch("https://vivos-api.vercel.app/api/device-token/unregister", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        token,
+      }),
+    })
+
+    const data = await response.json().catch(() => null)
+
+    if (!response.ok) {
+      console.warn("Push token unregister failed", response.status, data)
+      return {
+        ok: false,
+        status: response.status,
+        data,
+      }
+    }
+
+    return {
+      ok: true,
+      data,
+    }
+  } catch (error) {
+    console.warn("Push token unregister error", error)
+
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
