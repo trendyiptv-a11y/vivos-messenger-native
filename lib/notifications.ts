@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { t } from "@/lib/i18n"
 
 export const NOTIFICATION_CHANNELS = {
-  messages: "vivos-messages-v4",
+  messages: "vivos-messages-v5",
   calls: "vivos-calls-v3",
 }
 
@@ -61,7 +61,7 @@ export async function configureAndroidNotificationChannels() {
 
   // Doar messages — canalul calls e creat exclusiv de Notifee în setupNotifeeCallChannel
   await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.messages, {
-    name: "VIVOS Calls",
+    name: "VIVOS Messages",
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 140],
     lightColor: "#63A6E6",
