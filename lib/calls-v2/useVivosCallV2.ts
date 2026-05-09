@@ -52,6 +52,7 @@ import {
   toggleVivosSpeaker,
 } from "@/lib/calls-v2/audioRoute"
 import { notifyVivosCallV2 } from "@/lib/calls-v2/callNotify"
+import { consumePendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
 
 type UseVivosCallV2Args = {
   conversationId: string
@@ -478,6 +479,42 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
     await cleanupMediaAndPeer()
     setCallState((state) => setCallStatus(state, "rejected", "Apel respins"))
   }, [cleanupMediaAndPeer, conversationId, userId])
+
+  useEffect(() => {
+    if (!conversationId || !userId) return
+
+    const pending = consumePendingVivosCallFromNotification(conversationId)
+    if (!pending) return
+
+    const { call, action } = pending
+
+    currentCallRef.current = {
+      callSessionId: call.callSessionId,
+      callType: call.callType,
+      remoteUserId: call.fromUserId,
+    }
+
+    setCallState(
+      startIncomingCallState({
+        callSessionId: call.callSessionId,
+        conversationId: call.conversationId,
+        remoteUserId: call.fromUserId,
+        callType: call.callType,
+      })
+    )
+
+    if (action === "accept") {
+      setTimeout(() => {
+        void acceptCall()
+      }, 250)
+    }
+
+    if (action === "reject") {
+      setTimeout(() => {
+        void rejectCall()
+      }, 250)
+    }
+  }, [acceptCall, conversationId, rejectCall, userId])
 
   const endCall = useCallback(async () => {
     if (!userId || !conversationId) return
