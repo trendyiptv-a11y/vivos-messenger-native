@@ -12,6 +12,7 @@ import {
   setupVivosCallV2NotificationChannel,
 } from "@/lib/calls-v2/notifeeCallV2"
 import { stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
+import { registerVivosCallV2FcmForegroundHandler } from "@/lib/calls-v2/fcmCallHandler"
 import { theme } from "@/lib/theme"
 
 export default function RootLayout() {
@@ -65,6 +66,8 @@ export default function RootLayout() {
       router.push({ pathname: "/chat/[id]", params: { id: conversationId } })
     })
 
+    const fcmUnsubscribe = registerVivosCallV2FcmForegroundHandler()
+
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
       routeForegroundNotification(notification)
     })
@@ -79,6 +82,7 @@ export default function RootLayout() {
 
     return () => {
       notifeeUnsubscribe()
+      fcmUnsubscribe()
       receivedSubscription.remove()
       responseSubscription.remove()
       void stopVivosCallV2Ringtone()
