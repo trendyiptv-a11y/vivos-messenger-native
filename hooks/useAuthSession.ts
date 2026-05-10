@@ -3,6 +3,7 @@ import { useState } from "react"
 import { Session } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
 import { registerPushToken } from "@/lib/notifications"
+import { registerFcmToken } from "@/lib/fcmToken"
 
 export function useAuthSession() {
   const [session, setSession] = useState<Session | null>(null)
@@ -13,11 +14,13 @@ export function useAuthSession() {
 
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return
+
       setSession(data.session ?? null)
       setLoading(false)
 
       if (data.session?.user?.id) {
-        registerPushToken(data.session.user.id)
+        void registerPushToken(data.session.user.id)
+        void registerFcmToken()
       }
     })
 
@@ -28,7 +31,8 @@ export function useAuthSession() {
       setLoading(false)
 
       if (nextSession?.user?.id) {
-        registerPushToken(nextSession.user.id)
+        void registerPushToken(nextSession.user.id)
+        void registerFcmToken()
       }
     })
 
