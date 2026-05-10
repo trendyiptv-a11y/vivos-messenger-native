@@ -62,7 +62,9 @@
           "cameraPermission": "Permite VIVOS Messenger să folosească camera pentru apeluri video.",
           "microphonePermission": "Permite VIVOS Messenger să folosească microfonul pentru apeluri audio și video."
         }
-      ]
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging"
     ],
     "experiments": {
       "typedRoutes": true

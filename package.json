@@ -21,9 +21,17 @@
     "@expo/vector-icons": "^14.0.2",
     "@notifee/react-native": "^9.1.8",
     "@react-native-async-storage/async-storage": "2.1.2",
+<<<<<<< HEAD
     "@react-native-firebase/app": "^24.0.0",
     "@react-native-firebase/messaging": "^24.0.0",
+=======
+<<<<<<< HEAD
+>>>>>>> 8542dc1 (Add Firebase messaging config)
     "@react-native-masked-view/masked-view": "^0.3.2",
+=======
+    "@react-native-firebase/app": "^24.0.0",
+    "@react-native-firebase/messaging": "^24.0.0",
+>>>>>>> d0e7280 (Add Firebase messaging config)
     "@supabase/supabase-js": "^2.49.8",
     "event-target-shim": "^6.0.2",
     "expo": "~53.0.12",
