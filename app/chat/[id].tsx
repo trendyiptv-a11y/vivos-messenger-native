@@ -29,6 +29,7 @@ export default function ChatScreenIntegrated() {
     setBody,
     otherMember,
     otherName,
+    selfName,
     handleSend,
   } = useChatConversation(conversationId)
 
@@ -48,6 +49,7 @@ export default function ChatScreenIntegrated() {
     userId,
     remoteUserId: otherMember?.member_id ?? null,
     remoteName: otherName,
+    callerName: selfName,
   })
 
   const [menuOpen, setMenuOpen] = useState(false)
