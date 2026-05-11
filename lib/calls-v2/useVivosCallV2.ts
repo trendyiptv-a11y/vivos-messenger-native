@@ -51,6 +51,7 @@ import {
   subscribeVivosAudioRoute,
   toggleVivosSpeaker,
 } from "@/lib/calls-v2/audioRoute"
+import { startVivosRingbackTone, stopVivosRingbackTone } from "@/lib/calls-v2/ringbackTone"
 import { notifyVivosCallV2 } from "@/lib/calls-v2/callNotify"
 import { consumePendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
 import { supabase } from "@/lib/supabase"
@@ -177,6 +178,7 @@ export function useVivosCallV2({
   )
 
   const cleanupMediaAndPeer = useCallback(async () => {
+    await stopVivosRingbackTone()
     setVivosLocalIceHandler(null)
     pendingRemoteIceRef.current = []
     await stopVivosAudioRoute()
@@ -232,6 +234,8 @@ export function useVivosCallV2({
           const current = currentCallRef.current
           if (signal.callSessionId !== current.callSessionId) return
 
+          await stopVivosRingbackTone()
+
           setCallState((state) => setCallStatus(state, "connecting", "Accept primit, creez offer"))
 
           const offer = await createVivosOffer()
@@ -255,6 +259,7 @@ export function useVivosCallV2({
           const current = currentCallRef.current
           if (signal.callSessionId !== current.callSessionId) return
 
+          await stopVivosRingbackTone()
           await cleanupMediaAndPeer()
           setCallState((state) => setCallStatus(state, "rejected", "Apel respins"))
           return
@@ -264,6 +269,7 @@ export function useVivosCallV2({
           const current = currentCallRef.current
           if (current.callSessionId && signal.callSessionId !== current.callSessionId) return
 
+          await stopVivosRingbackTone()
           await cleanupMediaAndPeer()
           setCallState((state) => endCallState(state, "Apel închis de celălalt utilizator"))
           return
@@ -517,6 +523,8 @@ export function useVivosCallV2({
           toUserId: remoteUserId,
           callType,
         })
+
+        await startVivosRingbackTone()
 
         void notifyVivosCallV2({
           conversationId,
