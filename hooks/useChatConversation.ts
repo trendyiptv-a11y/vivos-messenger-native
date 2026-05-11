@@ -257,6 +257,7 @@ export function useChatConversation(conversationId: string) {
     setBody: updateBody,
     otherMember,
     otherName,
+    selfName,
     handleSend,
   }
 }
