@@ -53,19 +53,26 @@ import {
 } from "@/lib/calls-v2/audioRoute"
 import { notifyVivosCallV2 } from "@/lib/calls-v2/callNotify"
 import { consumePendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
+import { supabase } from "@/lib/supabase"
 
 type UseVivosCallV2Args = {
   conversationId: string
   userId: string | null
   remoteUserId: string | null
   remoteName?: string
+  callerName?: string | null
 }
 
 function createCallSessionId() {
   return `vivos-call-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivosCallV2Args) {
+export function useVivosCallV2({
+  conversationId,
+  userId,
+  remoteUserId,
+  callerName,
+}: UseVivosCallV2Args) {
   const [callState, setCallState] = useState<VivosCallRuntimeState>(() => createIdleCallState())
 
   const channelRef = useRef<RealtimeChannel | null>(null)
@@ -371,6 +378,105 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
     }
   }, [cleanupMediaAndPeer])
 
+  const createNativeCallHistory = useCallback(
+    async (args: {
+      callSessionId: string
+      callType: VivosCallType
+    }) => {
+      if (!userId || !remoteUserId || !conversationId) return
+
+      try {
+        const { error: sessionError } = await supabase.from("call_sessions").insert({
+          id: args.callSessionId,
+          conversation_id: conversationId,
+          caller_id: userId,
+          callee_id: remoteUserId,
+          status: "ringing",
+          call_type: args.callType,
+        })
+
+        if (sessionError) {
+          console.warn("V2 call history session insert failed", sessionError)
+        }
+
+        const { error: eventError } = await supabase.from("call_events").insert({
+          call_session_id: args.callSessionId,
+          actor_id: userId,
+          event_type: "invite",
+          payload: {
+            conversationId,
+            callType: args.callType,
+            source: "native-v2",
+          },
+        })
+
+        if (eventError) {
+          console.warn("V2 call history invite event failed", eventError)
+        }
+      } catch (error) {
+        console.warn("V2 call history create failed", error)
+      }
+    },
+    [conversationId, remoteUserId, userId]
+  )
+
+  const updateNativeCallHistory = useCallback(
+    async (args: {
+      callSessionId: string
+      status: "accepted" | "rejected" | "ended" | "missed" | "failed"
+      eventType: "accept" | "reject" | "end" | "missed" | "failed"
+      callType: VivosCallType
+    }) => {
+      if (!userId || !conversationId) return
+
+      try {
+        const patch: Record<string, string> = {
+          status: args.status,
+        }
+
+        if (args.status === "accepted") {
+          patch.answered_at = new Date().toISOString()
+        }
+
+        if (
+          args.status === "rejected" ||
+          args.status === "ended" ||
+          args.status === "missed" ||
+          args.status === "failed"
+        ) {
+          patch.ended_at = new Date().toISOString()
+        }
+
+        const { error: sessionError } = await supabase
+          .from("call_sessions")
+          .update(patch)
+          .eq("id", args.callSessionId)
+
+        if (sessionError) {
+          console.warn("V2 call history session update failed", sessionError)
+        }
+
+        const { error: eventError } = await supabase.from("call_events").insert({
+          call_session_id: args.callSessionId,
+          actor_id: userId,
+          event_type: args.eventType,
+          payload: {
+            conversationId,
+            callType: args.callType,
+            source: "native-v2",
+          },
+        })
+
+        if (eventError) {
+          console.warn("V2 call history event insert failed", eventError)
+        }
+      } catch (error) {
+        console.warn("V2 call history update failed", error)
+      }
+    },
+    [conversationId, userId]
+  )
+
   const startCall = useCallback(
     async (callType: VivosCallType) => {
       if (!userId || !remoteUserId || !conversationId) return false
@@ -379,6 +485,11 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
       setCallState(createIdleCallState())
 
       const callSessionId = createCallSessionId()
+
+      void createNativeCallHistory({
+        callSessionId,
+        callType,
+      })
 
       currentCallRef.current = {
         callSessionId,
@@ -413,7 +524,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
           fromUserId: userId,
           toUserId: remoteUserId,
           callType,
-          callerName: "VIVOS",
+          callerName: callerName?.trim() || "VIVOS",
         })
 
         setCallState((state) => setCallStatus(state, "ringing_outgoing", "Invite trimis"))
@@ -426,7 +537,15 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
         return false
       }
     },
-    [cleanupMediaAndPeer, conversationId, prepareLocalPeer, remoteUserId, userId]
+    [
+      callerName,
+      cleanupMediaAndPeer,
+      conversationId,
+      createNativeCallHistory,
+      prepareLocalPeer,
+      remoteUserId,
+      userId,
+    ]
   )
 
   const acceptCall = useCallback(async () => {
@@ -449,6 +568,13 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
         callType: current.callType,
       })
 
+      void updateNativeCallHistory({
+        callSessionId: current.callSessionId,
+        status: "accepted",
+        eventType: "accept",
+        callType: current.callType,
+      })
+
       setCallState((state) => setCallStatus(state, "connecting", "Accept trimis, aștept offer"))
       return true
     } catch (error) {
@@ -458,7 +584,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
       setCallState((state) => failCallState(state, message))
       return false
     }
-  }, [cleanupMediaAndPeer, conversationId, prepareLocalPeer, userId])
+  }, [cleanupMediaAndPeer, conversationId, prepareLocalPeer, updateNativeCallHistory, userId])
 
   const rejectCall = useCallback(async () => {
     if (!userId || !conversationId) return
@@ -474,11 +600,18 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
         toUserId: current.remoteUserId,
         callType: current.callType,
       })
+
+      void updateNativeCallHistory({
+        callSessionId: current.callSessionId,
+        status: "rejected",
+        eventType: "reject",
+        callType: current.callType,
+      })
     }
 
     await cleanupMediaAndPeer()
     setCallState((state) => setCallStatus(state, "rejected", "Apel respins"))
-  }, [cleanupMediaAndPeer, conversationId, userId])
+  }, [cleanupMediaAndPeer, conversationId, updateNativeCallHistory, userId])
 
   useEffect(() => {
     if (!conversationId || !userId) return
@@ -530,11 +663,18 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
         toUserId: current.remoteUserId,
         callType: current.callType,
       })
+
+      void updateNativeCallHistory({
+        callSessionId: current.callSessionId,
+        status: "ended",
+        eventType: "end",
+        callType: current.callType,
+      })
     }
 
     await cleanupMediaAndPeer()
     setCallState((state) => endCallState(state, "Apel închis"))
-  }, [cleanupMediaAndPeer, conversationId, userId])
+  }, [cleanupMediaAndPeer, conversationId, updateNativeCallHistory, userId])
 
   const toggleMicrophone = useCallback(() => {
     const media = getMediaSnapshot()
