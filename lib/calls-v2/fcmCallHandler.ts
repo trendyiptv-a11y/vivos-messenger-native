@@ -5,6 +5,7 @@ import {
   cancelVivosCallV2IncomingNotification,
 } from "@/lib/calls-v2/notifeeCallV2"
 import {
+  clearPendingVivosCallFromNotification,
   setPendingVivosCallFromNotification,
   VivosCallNotificationAction,
 } from "@/lib/calls-v2/callNotificationState"
@@ -26,13 +27,22 @@ function asString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null
 }
 
+function getCallKind(data: VivosCallFcmData | undefined | null) {
+  return asString(data?.kind) || asString(data?.type)
+}
+
 function isIncomingCallV2(data: VivosCallFcmData | undefined | null) {
-  const kind = asString(data?.kind) || asString(data?.type)
+  const kind = getCallKind(data)
   return kind === "incoming_call_v2" || kind === "call_v2"
 }
 
-function normalizeCallData(data: VivosCallFcmData | undefined | null) {
-  if (!isIncomingCallV2(data)) return null
+function isCancelledCallV2(data: VivosCallFcmData | undefined | null) {
+  const kind = getCallKind(data)
+  return kind === "call_v2_cancelled" || kind === "call_cancelled_v2" || kind === "call_v2_ended"
+}
+
+function normalizeCallData(data: VivosCallFcmData | undefined | null, allowCancelled = false) {
+  if (!isIncomingCallV2(data) && !(allowCancelled && isCancelledCallV2(data))) return null
 
   const conversationId = asString(data?.conversationId)
   const callSessionId = asString(data?.callSessionId)
@@ -55,6 +65,13 @@ function normalizeAction(value: unknown): VivosCallNotificationAction {
 
 async function handleIncomingCallFcmMessage(message: FirebaseMessagingTypes.RemoteMessage) {
   const data = (message.data ?? {}) as VivosCallFcmData
+
+  if (isCancelledCallV2(data)) {
+    clearPendingVivosCallFromNotification()
+    await cancelVivosCallV2IncomingNotification()
+    return
+  }
+
   const call = normalizeCallData(data)
 
   if (!call) return
@@ -105,5 +122,6 @@ export function registerVivosCallV2FcmForegroundHandler() {
 }
 
 export async function stopVivosCallV2FcmCall() {
+  clearPendingVivosCallFromNotification()
   await cancelVivosCallV2IncomingNotification()
 }
