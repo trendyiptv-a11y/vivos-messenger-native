@@ -1,0 +1,68 @@
+type ActiveVivosCallRuntimeState = {
+  conversationId: string | null
+  callSessionId: string | null
+}
+
+const state: ActiveVivosCallRuntimeState = {
+  conversationId: null,
+  callSessionId: null,
+}
+
+function clean(value?: string | null) {
+  return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+export function setActiveVivosCallConversation(conversationId?: string | null) {
+  state.conversationId = clean(conversationId)
+}
+
+export function setActiveVivosCallSession(args: {
+  conversationId?: string | null
+  callSessionId?: string | null
+}) {
+  state.conversationId = clean(args.conversationId)
+  state.callSessionId = clean(args.callSessionId)
+}
+
+export function clearActiveVivosCallSession(callSessionId?: string | null) {
+  const targetCallSessionId = clean(callSessionId)
+
+  if (targetCallSessionId && state.callSessionId && state.callSessionId !== targetCallSessionId) {
+    return
+  }
+
+  state.callSessionId = null
+}
+
+export function clearActiveVivosCallConversation(conversationId?: string | null) {
+  const targetConversationId = clean(conversationId)
+
+  if (targetConversationId && state.conversationId && state.conversationId !== targetConversationId) {
+    return
+  }
+
+  state.conversationId = null
+  state.callSessionId = null
+}
+
+export function isActiveVivosCallConversation(conversationId?: string | null) {
+  const targetConversationId = clean(conversationId)
+  return Boolean(targetConversationId && state.conversationId === targetConversationId)
+}
+
+export function isSameActiveVivosCall(args: {
+  conversationId?: string | null
+  callSessionId?: string | null
+}) {
+  const targetConversationId = clean(args.conversationId)
+  const targetCallSessionId = clean(args.callSessionId)
+
+  if (!targetConversationId || state.conversationId !== targetConversationId) return false
+  if (!targetCallSessionId) return true
+
+  return !state.callSessionId || state.callSessionId === targetCallSessionId
+}
+
+export function getActiveVivosCallRuntimeSnapshot() {
+  return { ...state }
+}
