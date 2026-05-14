@@ -59,13 +59,18 @@ type UseVivosCallV2Args = {
   userId: string | null
   remoteUserId: string | null
   remoteName?: string
+  selfName?: string
 }
 
 function createCallSessionId() {
   return `vivos-call-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivosCallV2Args) {
+function normalizeCallerName(value?: string | null) {
+  return value?.trim() || "Un membru VIVOS"
+}
+
+export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName }: UseVivosCallV2Args) {
   const [callState, setCallState] = useState<VivosCallRuntimeState>(() => createIdleCallState())
 
   const channelRef = useRef<RealtimeChannel | null>(null)
@@ -207,10 +212,10 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
         fromUserId: userId,
         toUserId: current.remoteUserId,
         callType: current.callType,
-        callerName: "VIVOS",
+        callerName: normalizeCallerName(selfName),
       })
     },
-    [conversationId, userId]
+    [conversationId, selfName, userId]
   )
 
   const handleSignal = useCallback(
@@ -429,7 +434,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
           fromUserId: userId,
           toUserId: remoteUserId,
           callType,
-          callerName: "VIVOS",
+          callerName: normalizeCallerName(selfName),
         })
 
         setCallState((state) => setCallStatus(state, "ringing_outgoing", "Invite trimis"))
@@ -442,7 +447,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
         return false
       }
     },
-    [cleanupMediaAndPeer, conversationId, prepareLocalPeer, remoteUserId, userId]
+    [cleanupMediaAndPeer, conversationId, prepareLocalPeer, remoteUserId, selfName, userId]
   )
 
   const acceptCall = useCallback(async () => {
