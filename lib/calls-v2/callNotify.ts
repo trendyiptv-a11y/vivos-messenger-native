@@ -18,7 +18,7 @@ async function getAccessToken() {
   return session?.access_token ?? null
 }
 
-export async function notifyVivosCallV2(args: NotifyVivosCallV2Args) {
+async function postVivosCallV2Notification(args: NotifyVivosCallV2Args & { event?: "incoming" | "cancelled" }) {
   const accessToken = await getAccessToken()
 
   if (!accessToken) {
@@ -34,6 +34,7 @@ export async function notifyVivosCallV2(args: NotifyVivosCallV2Args) {
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
+        event: args.event || "incoming",
         conversationId: args.conversationId,
         callSessionId: args.callSessionId,
         fromUserId: args.fromUserId,
@@ -66,4 +67,12 @@ export async function notifyVivosCallV2(args: NotifyVivosCallV2Args) {
       reason: error instanceof Error ? error.message : String(error),
     }
   }
+}
+
+export async function notifyVivosCallV2(args: NotifyVivosCallV2Args) {
+  return postVivosCallV2Notification({ ...args, event: "incoming" })
+}
+
+export async function notifyVivosCallV2Cancelled(args: NotifyVivosCallV2Args) {
+  return postVivosCallV2Notification({ ...args, event: "cancelled" })
 }
