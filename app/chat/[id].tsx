@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { KeyboardAvoidingView, Platform, StyleSheet, ScrollView, View } from "react-native"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
@@ -11,6 +11,10 @@ import { MessageBubbleList } from "@/components/messenger/MessageBubbleList"
 import { VivosCallV2Overlay } from "@/components/calls-v2/VivosCallV2Overlay"
 import { useChatConversation } from "@/hooks/useChatConversation"
 import { useVivosCallV2 } from "@/lib/calls-v2/useVivosCallV2"
+import {
+  clearActiveVivosCallConversation,
+  setActiveVivosCallConversation,
+} from "@/lib/calls-v2/activeCallRuntime"
 import { theme } from "@/lib/theme"
 import { unregisterPushToken } from "@/lib/notifications"
 
@@ -32,6 +36,16 @@ export default function ChatScreenIntegrated() {
     selfName,
     handleSend,
   } = useChatConversation(conversationId)
+
+  useEffect(() => {
+    if (!conversationId) return
+
+    setActiveVivosCallConversation(conversationId)
+
+    return () => {
+      clearActiveVivosCallConversation(conversationId)
+    }
+  }, [conversationId])
 
   const {
     callState,
