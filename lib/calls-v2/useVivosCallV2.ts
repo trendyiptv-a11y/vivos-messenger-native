@@ -51,7 +51,7 @@ import {
   subscribeVivosAudioRoute,
   toggleVivosSpeaker,
 } from "@/lib/calls-v2/audioRoute"
-import { notifyVivosCallV2 } from "@/lib/calls-v2/callNotify"
+import { notifyVivosCallV2, notifyVivosCallV2Cancelled } from "@/lib/calls-v2/callNotify"
 import { consumePendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
 
 type UseVivosCallV2Args = {
@@ -196,6 +196,22 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
 
     refreshSnapshots()
   }, [refreshSnapshots])
+
+  const notifyCancelForCurrentCall = useCallback(
+    async (current: { callSessionId: string | null; callType: VivosCallType; remoteUserId: string | null }) => {
+      if (!userId || !conversationId || !current.callSessionId || !current.remoteUserId) return
+
+      await notifyVivosCallV2Cancelled({
+        conversationId,
+        callSessionId: current.callSessionId,
+        fromUserId: userId,
+        toUserId: current.remoteUserId,
+        callType: current.callType,
+        callerName: "VIVOS",
+      })
+    },
+    [conversationId, userId]
+  )
 
   const handleSignal = useCallback(
     async (signal: VivosCallSignalPayload) => {
@@ -474,11 +490,13 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
         toUserId: current.remoteUserId,
         callType: current.callType,
       })
+
+      void notifyCancelForCurrentCall(current)
     }
 
     await cleanupMediaAndPeer()
     setCallState((state) => setCallStatus(state, "rejected", "Apel respins"))
-  }, [cleanupMediaAndPeer, conversationId, userId])
+  }, [cleanupMediaAndPeer, conversationId, notifyCancelForCurrentCall, userId])
 
   useEffect(() => {
     if (!conversationId || !userId) return
@@ -530,11 +548,13 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId }: UseVivo
         toUserId: current.remoteUserId,
         callType: current.callType,
       })
+
+      void notifyCancelForCurrentCall(current)
     }
 
     await cleanupMediaAndPeer()
     setCallState((state) => endCallState(state, "Apel închis"))
-  }, [cleanupMediaAndPeer, conversationId, userId])
+  }, [cleanupMediaAndPeer, conversationId, notifyCancelForCurrentCall, userId])
 
   const toggleMicrophone = useCallback(() => {
     const media = getMediaSnapshot()
