@@ -45,6 +45,10 @@ export function clearActiveVivosCallConversation(conversationId?: string | null)
   state.callSessionId = null
 }
 
+export function hasActiveVivosCallSession() {
+  return Boolean(state.callSessionId)
+}
+
 export function isActiveVivosCallConversation(conversationId?: string | null) {
   const targetConversationId = clean(conversationId)
   return Boolean(targetConversationId && state.conversationId === targetConversationId)
@@ -61,6 +65,21 @@ export function isSameActiveVivosCall(args: {
   if (!targetCallSessionId) return true
 
   return !state.callSessionId || state.callSessionId === targetCallSessionId
+}
+
+export function shouldBlockIncomingVivosCall(args: {
+  conversationId?: string | null
+  callSessionId?: string | null
+}) {
+  const targetConversationId = clean(args.conversationId)
+  const targetCallSessionId = clean(args.callSessionId)
+
+  if (!state.callSessionId) return false
+  if (!targetConversationId) return true
+  if (state.conversationId && state.conversationId !== targetConversationId) return true
+  if (!targetCallSessionId) return true
+
+  return state.callSessionId !== targetCallSessionId
 }
 
 export function getActiveVivosCallRuntimeSnapshot() {
