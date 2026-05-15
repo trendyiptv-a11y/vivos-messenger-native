@@ -1,4 +1,4 @@
-import { Platform } from "react-native"
+import { AppState, Platform } from "react-native"
 import messaging, { FirebaseMessagingTypes } from "@react-native-firebase/messaging"
 import {
   displayVivosCallV2IncomingNotification,
@@ -42,6 +42,10 @@ function isCancelledCallV2(data: VivosCallFcmData | undefined | null) {
   return kind === "call_v2_cancelled" || kind === "call_cancelled_v2" || kind === "call_v2_ended"
 }
 
+function isAppInForeground() {
+  return AppState.currentState === "active"
+}
+
 function normalizeCallData(data: VivosCallFcmData | undefined | null, allowCancelled = false) {
   if (!isIncomingCallV2(data) && !(allowCancelled && isCancelledCallV2(data))) return null
 
@@ -78,6 +82,7 @@ async function handleIncomingCallFcmMessage(message: FirebaseMessagingTypes.Remo
   if (!call) return
 
   if (
+    isAppInForeground() &&
     isSameActiveVivosCall({
       conversationId: call.conversationId,
       callSessionId: call.callSessionId,
