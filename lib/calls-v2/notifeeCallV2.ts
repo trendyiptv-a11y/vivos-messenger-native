@@ -10,6 +10,7 @@ import { Platform, Vibration } from "react-native"
 import InCallManager from "react-native-incall-manager"
 import { NOTIFICATION_ACTIONS, NOTIFICATION_CHANNELS } from "@/lib/notifications"
 import { setPendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
+import { savePendingCallNotificationRoute } from "@/lib/calls-v2/callNotificationRoute"
 import { shouldBlockIncomingVivosCall } from "@/lib/calls-v2/activeCallRuntime"
 import { VivosCallType } from "@/lib/calls-v2/types"
 
@@ -23,6 +24,8 @@ type IncomingCallV2NotificationArgs = {
   callerName?: string | null
   callType?: VivosCallType
 }
+
+type NotificationCallAction = "accept" | "reject" | "open"
 
 function asString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null
@@ -50,6 +53,20 @@ function shouldIgnoreNotificationCall(call: ReturnType<typeof normalizeCallData>
     conversationId: call.conversationId,
     callSessionId: call.callSessionId,
   })
+}
+
+function getNotificationAction(pressActionId?: string | null): NotificationCallAction {
+  if (pressActionId === NOTIFICATION_ACTIONS.acceptCall) return "accept"
+  if (pressActionId === NOTIFICATION_ACTIONS.rejectCall) return "reject"
+  return "open"
+}
+
+async function storeNotificationCallAction(
+  call: NonNullable<ReturnType<typeof normalizeCallData>>,
+  action: NotificationCallAction
+) {
+  setPendingVivosCallFromNotification(call, action)
+  await savePendingCallNotificationRoute({ ...call, action })
 }
 
 export async function setupVivosCallV2NotificationChannel() {
@@ -189,15 +206,13 @@ export function registerVivosCallV2NotifeeEvents(onOpenConversation?: (conversat
 
     if (shouldIgnoreNotificationCall(call)) return
 
-    const action =
-      detail.pressAction?.id === NOTIFICATION_ACTIONS.acceptCall
-        ? "accept"
-        : detail.pressAction?.id === NOTIFICATION_ACTIONS.rejectCall
-          ? "reject"
-          : "open"
+    const action = getNotificationAction(detail.pressAction?.id)
 
-    setPendingVivosCallFromNotification(call, action)
-    onOpenConversation?.(call.conversationId)
+    await storeNotificationCallAction(call, action)
+
+    if (action !== "reject") {
+      onOpenConversation?.(call.conversationId)
+    }
   })
 
   notifee.onBackgroundEvent(async ({ type, detail }) => {
@@ -211,14 +226,8 @@ export function registerVivosCallV2NotifeeEvents(onOpenConversation?: (conversat
 
     if (shouldIgnoreNotificationCall(call)) return
 
-    const action =
-      detail.pressAction?.id === NOTIFICATION_ACTIONS.acceptCall
-        ? "accept"
-        : detail.pressAction?.id === NOTIFICATION_ACTIONS.rejectCall
-          ? "reject"
-          : "open"
-
-    setPendingVivosCallFromNotification(call, action)
+    const action = getNotificationAction(detail.pressAction?.id)
+    await storeNotificationCallAction(call, action)
   })
 
   return unsubscribeForeground
@@ -238,13 +247,7 @@ export function registerVivosCallV2NotifeeBackgroundHandler() {
 
     if (shouldIgnoreNotificationCall(call)) return
 
-    const action =
-      detail.pressAction?.id === NOTIFICATION_ACTIONS.acceptCall
-        ? "accept"
-        : detail.pressAction?.id === NOTIFICATION_ACTIONS.rejectCall
-          ? "reject"
-          : "open"
-
-    setPendingVivosCallFromNotification(call, action)
+    const action = getNotificationAction(detail.pressAction?.id)
+    await storeNotificationCallAction(call, action)
   })
 }
