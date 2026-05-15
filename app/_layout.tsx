@@ -1,7 +1,7 @@
 import { Stack, useRouter, useSegments } from "expo-router"
 import { ActivityIndicator, AppState, View } from "react-native"
 import { StatusBar } from "expo-status-bar"
-import { useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import * as Notifications from "expo-notifications"
 import { AppErrorBoundary } from "@/components/system/AppErrorBoundary"
 import { useAuthSession } from "@/hooks/useAuthSession"
@@ -13,6 +13,7 @@ import {
 } from "@/lib/calls-v2/notifeeCallV2"
 import { stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
 import { registerVivosCallV2FcmForegroundHandler } from "@/lib/calls-v2/fcmCallHandler"
+import { consumePendingCallNotificationRoute } from "@/lib/calls-v2/callNotificationRoute"
 import { theme } from "@/lib/theme"
 
 export default function RootLayout() {
@@ -20,6 +21,17 @@ export default function RootLayout() {
   const segments = useSegments()
   const router = useRouter()
   const processedNotifIds = useRef<Set<string>>(new Set())
+
+  const consumeCallRoute = useCallback(async () => {
+    const route = await consumePendingCallNotificationRoute()
+    if (!route) return
+
+    if (route.action === "reject") {
+      return
+    }
+
+    router.push({ pathname: "/chat/[id]", params: { id: route.conversationId } })
+  }, [router])
 
   useEffect(() => {
     if (loading) return
@@ -52,6 +64,8 @@ export default function RootLayout() {
   useEffect(() => {
     if (!isAuthenticated || loading) return
 
+    void consumeCallRoute()
+
     Notifications.getLastNotificationResponseAsync().then((lastResponse) => {
       if (!lastResponse) return
 
@@ -68,6 +82,13 @@ export default function RootLayout() {
 
     const fcmUnsubscribe = registerVivosCallV2FcmForegroundHandler()
 
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        clearNativeBadge()
+        void consumeCallRoute()
+      }
+    })
+
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
       routeForegroundNotification(notification)
     })
@@ -83,11 +104,12 @@ export default function RootLayout() {
     return () => {
       notifeeUnsubscribe()
       fcmUnsubscribe()
+      appStateSubscription.remove()
       receivedSubscription.remove()
       responseSubscription.remove()
       void stopVivosCallV2Ringtone()
     }
-  }, [isAuthenticated, loading, router])
+  }, [consumeCallRoute, isAuthenticated, loading, router])
 
   if (loading) {
     return (
