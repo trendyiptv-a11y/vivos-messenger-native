@@ -11,6 +11,7 @@ import InCallManager from "react-native-incall-manager"
 import { NOTIFICATION_ACTIONS, NOTIFICATION_CHANNELS } from "@/lib/notifications"
 import { setPendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
 import { savePendingCallNotificationRoute } from "@/lib/calls-v2/callNotificationRoute"
+import { rejectVivosCallFromNotification } from "@/lib/calls-v2/notificationReject"
 import { shouldBlockIncomingVivosCall } from "@/lib/calls-v2/activeCallRuntime"
 import { VivosCallType } from "@/lib/calls-v2/types"
 
@@ -67,6 +68,19 @@ async function storeNotificationCallAction(
 ) {
   setPendingVivosCallFromNotification(call, action)
   await savePendingCallNotificationRoute({ ...call, action })
+}
+
+async function rejectNotificationCall(call: NonNullable<ReturnType<typeof normalizeCallData>>) {
+  try {
+    await rejectVivosCallFromNotification({
+      conversationId: call.conversationId,
+      callSessionId: call.callSessionId,
+      callerUserId: call.fromUserId,
+      callType: call.callType,
+    })
+  } catch (error) {
+    console.warn("V2 notification reject failed", error)
+  }
 }
 
 export async function setupVivosCallV2NotificationChannel() {
@@ -210,9 +224,12 @@ export function registerVivosCallV2NotifeeEvents(onOpenConversation?: (conversat
 
     await storeNotificationCallAction(call, action)
 
-    if (action !== "reject") {
-      onOpenConversation?.(call.conversationId)
+    if (action === "reject") {
+      await rejectNotificationCall(call)
+      return
     }
+
+    onOpenConversation?.(call.conversationId)
   })
 
   notifee.onBackgroundEvent(async ({ type, detail }) => {
@@ -228,6 +245,10 @@ export function registerVivosCallV2NotifeeEvents(onOpenConversation?: (conversat
 
     const action = getNotificationAction(detail.pressAction?.id)
     await storeNotificationCallAction(call, action)
+
+    if (action === "reject") {
+      await rejectNotificationCall(call)
+    }
   })
 
   return unsubscribeForeground
@@ -249,5 +270,9 @@ export function registerVivosCallV2NotifeeBackgroundHandler() {
 
     const action = getNotificationAction(detail.pressAction?.id)
     await storeNotificationCallAction(call, action)
+
+    if (action === "reject") {
+      await rejectNotificationCall(call)
+    }
   })
 }
