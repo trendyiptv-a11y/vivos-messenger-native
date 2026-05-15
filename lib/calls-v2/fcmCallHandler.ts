@@ -9,7 +9,10 @@ import {
   setPendingVivosCallFromNotification,
   VivosCallNotificationAction,
 } from "@/lib/calls-v2/callNotificationState"
-import { isSameActiveVivosCall } from "@/lib/calls-v2/activeCallRuntime"
+import {
+  isSameActiveVivosCall,
+  shouldBlockIncomingVivosCall,
+} from "@/lib/calls-v2/activeCallRuntime"
 import { VivosCallType } from "@/lib/calls-v2/types"
 
 type VivosCallFcmData = {
@@ -80,6 +83,17 @@ async function handleIncomingCallFcmMessage(message: FirebaseMessagingTypes.Remo
   const call = normalizeCallData(data)
 
   if (!call) return
+
+  if (
+    shouldBlockIncomingVivosCall({
+      conversationId: call.conversationId,
+      callSessionId: call.callSessionId,
+    })
+  ) {
+    clearPendingVivosCallFromNotification()
+    await cancelVivosCallV2IncomingNotification()
+    return
+  }
 
   if (
     isAppInForeground() &&
