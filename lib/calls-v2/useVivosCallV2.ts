@@ -239,6 +239,13 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
 
       try {
         if (signal.type === "call_invite") {
+          const current = currentCallRef.current
+
+          if (current.callSessionId) {
+            await cancelVivosCallV2IncomingNotification()
+            return
+          }
+
           currentCallRef.current = {
             callSessionId: signal.callSessionId,
             callType: signal.callType,
@@ -535,6 +542,11 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
 
     const pending = consumePendingVivosCallFromNotification(conversationId)
     if (!pending) return
+
+    if (currentCallRef.current.callSessionId) {
+      void cancelVivosCallV2IncomingNotification()
+      return
+    }
 
     const { call, action } = pending
 
