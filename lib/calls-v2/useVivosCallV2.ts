@@ -517,24 +517,26 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
   const rejectCall = useCallback(async () => {
     if (!userId || !conversationId) return
 
-    const current = currentCallRef.current
+    const current = { ...currentCallRef.current }
+
+    await cancelVivosCallV2IncomingNotification()
+    await cleanupMediaAndPeer()
+    setCallState((state) => setCallStatus(state, "rejected", "Apel respins"))
 
     if (current.callSessionId && current.remoteUserId) {
-      await sendVivosCallReject({
+      void sendVivosCallReject({
         channel: channelRef.current,
         callSessionId: current.callSessionId,
         conversationId,
         fromUserId: userId,
         toUserId: current.remoteUserId,
         callType: current.callType,
+      }).catch((error) => {
+        console.warn("V2 reject signal failed", error)
       })
 
       void notifyCancelForCurrentCall(current)
     }
-
-    await cleanupMediaAndPeer()
-    await cancelVivosCallV2IncomingNotification()
-    setCallState((state) => setCallStatus(state, "rejected", "Apel respins"))
   }, [cleanupMediaAndPeer, conversationId, notifyCancelForCurrentCall, userId])
 
   useEffect(() => {
@@ -582,24 +584,26 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
   const endCall = useCallback(async () => {
     if (!userId || !conversationId) return
 
-    const current = currentCallRef.current
+    const current = { ...currentCallRef.current }
+
+    await cancelVivosCallV2IncomingNotification()
+    await cleanupMediaAndPeer()
+    setCallState((state) => endCallState(state, "Apel închis"))
 
     if (current.callSessionId && current.remoteUserId) {
-      await sendVivosCallEnd({
+      void sendVivosCallEnd({
         channel: channelRef.current,
         callSessionId: current.callSessionId,
         conversationId,
         fromUserId: userId,
         toUserId: current.remoteUserId,
         callType: current.callType,
+      }).catch((error) => {
+        console.warn("V2 end signal failed", error)
       })
 
       void notifyCancelForCurrentCall(current)
     }
-
-    await cleanupMediaAndPeer()
-    await cancelVivosCallV2IncomingNotification()
-    setCallState((state) => endCallState(state, "Apel închis"))
   }, [cleanupMediaAndPeer, conversationId, notifyCancelForCurrentCall, userId])
 
   const toggleMicrophone = useCallback(() => {
