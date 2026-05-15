@@ -10,6 +10,7 @@ import { Platform, Vibration } from "react-native"
 import InCallManager from "react-native-incall-manager"
 import { NOTIFICATION_ACTIONS, NOTIFICATION_CHANNELS } from "@/lib/notifications"
 import { setPendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
+import { shouldBlockIncomingVivosCall } from "@/lib/calls-v2/activeCallRuntime"
 import { VivosCallType } from "@/lib/calls-v2/types"
 
 const CALL_NOTIFICATION_ID = "vivos-incoming-call-v2"
@@ -42,6 +43,15 @@ function normalizeCallData(data: Record<string, unknown> | undefined) {
   }
 }
 
+function shouldIgnoreNotificationCall(call: ReturnType<typeof normalizeCallData>) {
+  if (!call) return true
+
+  return shouldBlockIncomingVivosCall({
+    conversationId: call.conversationId,
+    callSessionId: call.callSessionId,
+  })
+}
+
 export async function setupVivosCallV2NotificationChannel() {
   if (Platform.OS !== "android") return null
 
@@ -66,6 +76,16 @@ export async function displayVivosCallV2IncomingNotification(args: IncomingCallV
   const fromUserId = args.fromUserId ?? ""
   const callType = args.callType ?? "audio"
   const callerName = args.callerName?.trim() || "Un membru VIVOS"
+
+  if (
+    shouldBlockIncomingVivosCall({
+      conversationId,
+      callSessionId,
+    })
+  ) {
+    await cancelVivosCallV2IncomingNotification()
+    return
+  }
 
   await setupVivosCallV2NotificationChannel()
 
@@ -167,6 +187,8 @@ export function registerVivosCallV2NotifeeEvents(onOpenConversation?: (conversat
 
     await cancelVivosCallV2IncomingNotification()
 
+    if (shouldIgnoreNotificationCall(call)) return
+
     const action =
       detail.pressAction?.id === NOTIFICATION_ACTIONS.acceptCall
         ? "accept"
@@ -186,6 +208,8 @@ export function registerVivosCallV2NotifeeEvents(onOpenConversation?: (conversat
     if (!call) return
 
     await cancelVivosCallV2IncomingNotification()
+
+    if (shouldIgnoreNotificationCall(call)) return
 
     const action =
       detail.pressAction?.id === NOTIFICATION_ACTIONS.acceptCall
@@ -211,6 +235,8 @@ export function registerVivosCallV2NotifeeBackgroundHandler() {
     if (!call) return
 
     await cancelVivosCallV2IncomingNotification()
+
+    if (shouldIgnoreNotificationCall(call)) return
 
     const action =
       detail.pressAction?.id === NOTIFICATION_ACTIONS.acceptCall
