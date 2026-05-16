@@ -7,6 +7,7 @@ import { theme } from "@/lib/theme"
 type Props = {
   eyebrow?: string
   title: string
+  subtitle?: string
   left?: ReactNode
   right?: ReactNode
 }
@@ -40,7 +41,7 @@ function HeaderEyebrow({ eyebrow }: { eyebrow?: string }) {
   return <Text style={styles.eyebrow}>{eyebrow}</Text>
 }
 
-export function ScreenHeader({ eyebrow, title, left, right }: Props) {
+export function ScreenHeader({ eyebrow, title, subtitle, left, right }: Props) {
   return (
     <SafeAreaView edges={["top"]} style={styles.safe}>
       <View style={styles.row}>
@@ -48,6 +49,7 @@ export function ScreenHeader({ eyebrow, title, left, right }: Props) {
         <View style={styles.center}>
           <HeaderEyebrow eyebrow={eyebrow} />
           <Text style={styles.title}>{title}</Text>
+          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         </View>
         <View style={[styles.side, styles.right]}>{right}</View>
       </View>
@@ -118,6 +120,12 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: -0.25,
     marginTop: 3,
+  },
+  subtitle: {
+    color: theme.colors.textSoft,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
   },
   iconButton: {
     width: 42,
