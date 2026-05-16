@@ -10,6 +10,7 @@ import { BottomTabBar } from "@/components/ui/BottomTabBar"
 import { supabase } from "@/lib/supabase"
 import { gradientTextSeed, theme } from "@/lib/theme"
 import { unregisterPushToken } from "@/lib/notifications"
+import { updateOwnPresence } from "@/lib/presence/userPresence"
 
 type ProfileRow = {
   id: string
@@ -89,6 +90,7 @@ export default function ProfileScreen() {
   }
 
   async function handleLogout() {
+    await updateOwnPresence(userId, "disconnected")
     await unregisterPushToken()
     await supabase.auth.signOut()
     router.replace("/login")
