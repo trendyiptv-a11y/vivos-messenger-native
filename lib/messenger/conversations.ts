@@ -1,10 +1,5 @@
 import { supabase } from "@/lib/supabase"
 
-type ConversationMemberRow = {
-  conversation_id: string
-  member_id: string
-}
-
 export async function getOrCreateDirectConversation(currentUserId: string, otherUserId: string) {
   if (!currentUserId || !otherUserId) {
     throw new Error("Lipsesc utilizatorii pentru conversație.")
@@ -14,53 +9,24 @@ export async function getOrCreateDirectConversation(currentUserId: string, other
     throw new Error("Nu poți deschide conversație cu tine însuți.")
   }
 
-  const { data: ownMemberships, error: ownError } = await supabase
-    .from("conversation_members")
-    .select("conversation_id, member_id")
-    .eq("member_id", currentUserId)
+  const { data, error } = await supabase.rpc("find_or_create_direct_conversation", {
+    other_member_id: otherUserId,
+  })
 
-  if (ownError) throw ownError
-
-  const conversationIds = ((ownMemberships ?? []) as ConversationMemberRow[])
-    .map((row) => row.conversation_id)
-    .filter(Boolean)
-
-  if (conversationIds.length) {
-    const { data: otherMemberships, error: otherError } = await supabase
-      .from("conversation_members")
-      .select("conversation_id, member_id")
-      .eq("member_id", otherUserId)
-      .in("conversation_id", conversationIds)
-
-    if (otherError) throw otherError
-
-    const existing = ((otherMemberships ?? []) as ConversationMemberRow[])[0]?.conversation_id
-    if (existing) return existing
+  if (error || !data) {
+    throw new Error(error?.message || "Conversația nu a putut fi deschisă.")
   }
 
-  const { data: conversation, error: conversationError } = await supabase
-    .from("conversations")
-    .insert({})
-    .select("id")
-    .single()
+  const conversationId = String(data || "")
+  if (!conversationId) {
+    throw new Error("Conversația nu a putut fi deschisă.")
+  }
 
-  if (conversationError) throw conversationError
-
-  const conversationId = String((conversation as any)?.id || "")
-  if (!conversationId) throw new Error("Conversația nu a putut fi creată.")
-
-  const { error: membersError } = await supabase.from("conversation_members").insert([
-    {
-      conversation_id: conversationId,
-      member_id: currentUserId,
-    },
-    {
-      conversation_id: conversationId,
-      member_id: otherUserId,
-    },
-  ])
-
-  if (membersError) throw membersError
+  await supabase
+    .from("conversation_hidden_for_users")
+    .delete()
+    .eq("conversation_id", conversationId)
+    .eq("user_id", currentUserId)
 
   return conversationId
 }
