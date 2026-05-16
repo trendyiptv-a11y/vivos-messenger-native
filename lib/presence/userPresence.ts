@@ -1,7 +1,8 @@
 import { AppState, AppStateStatus } from "react-native"
 import { supabase } from "@/lib/supabase"
 
-export type UserPresenceStatus = "online" | "recent" | "offline" | "unknown"
+export type UserPresenceStatus = "connected" | "disconnected"
+export type OwnPresenceWriteStatus = "connected" | "disconnected"
 
 export type UserPresenceRow = {
   user_id: string
@@ -17,8 +18,7 @@ export type UserPresenceInfo = {
   lastSeenAt: string | null
 }
 
-const ONLINE_MS = 90 * 1000
-const RECENT_MS = 5 * 60 * 1000
+const DISCONNECTED_AFTER_MS = 90 * 24 * 60 * 60 * 1000
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 let appStateSubscription: { remove: () => void } | null = null
 let activeUserId: string | null = null
@@ -27,47 +27,49 @@ function nowIso() {
   return new Date().toISOString()
 }
 
+function normalizeWriteStatus(status?: string | null): UserPresenceStatus {
+  const value = String(status || "").toLowerCase()
+  if (value === "offline" || value === "disconnected") return "disconnected"
+  return "connected"
+}
+
 export function getPresenceInfo(userId: string, row?: UserPresenceRow | null, now = Date.now()): UserPresenceInfo {
   const lastSeenAt = row?.last_seen_at || row?.updated_at || null
 
   if (!lastSeenAt) {
     return {
       userId,
-      status: "unknown",
-      label: "Status necunoscut",
+      status: "disconnected",
+      label: "Neconectat",
       lastSeenAt: null,
     }
   }
 
   const ageMs = now - new Date(lastSeenAt).getTime()
+  const normalizedStatus = normalizeWriteStatus(row?.status)
 
-  if (Number.isFinite(ageMs) && ageMs <= ONLINE_MS) {
+  if (
+    normalizedStatus === "connected" &&
+    Number.isFinite(ageMs) &&
+    ageMs <= DISCONNECTED_AFTER_MS
+  ) {
     return {
       userId,
-      status: "online",
-      label: "Online",
-      lastSeenAt,
-    }
-  }
-
-  if (Number.isFinite(ageMs) && ageMs <= RECENT_MS) {
-    return {
-      userId,
-      status: "recent",
-      label: "Activ recent",
+      status: "connected",
+      label: "Conectat",
       lastSeenAt,
     }
   }
 
   return {
     userId,
-    status: "offline",
-    label: "Offline",
+    status: "disconnected",
+    label: "Neconectat",
     lastSeenAt,
   }
 }
 
-export async function updateOwnPresence(userId: string | null, status: "online" | "offline" = "online") {
+export async function updateOwnPresence(userId: string | null, status: OwnPresenceWriteStatus = "connected") {
   if (!userId) return { ok: false, skipped: true }
 
   try {
@@ -139,21 +141,18 @@ export function startPresenceHeartbeat(userId: string | null) {
   stopPresenceHeartbeatInternal()
   activeUserId = userId
 
-  void updateOwnPresence(userId, "online")
+  void updateOwnPresence(userId, "connected")
 
   heartbeatTimer = setInterval(() => {
-    void updateOwnPresence(activeUserId, "online")
+    void updateOwnPresence(activeUserId, "connected")
   }, 45 * 1000)
 
   appStateSubscription = AppState.addEventListener("change", (state: AppStateStatus) => {
     if (!activeUserId) return
 
-    if (state === "active") {
-      void updateOwnPresence(activeUserId, "online")
-      return
+    if (state === "active" || state === "background" || state === "inactive") {
+      void updateOwnPresence(activeUserId, "connected")
     }
-
-    void updateOwnPresence(activeUserId, "offline")
   })
 
   return stopPresenceHeartbeat
@@ -165,6 +164,6 @@ export function stopPresenceHeartbeat() {
   activeUserId = null
 
   if (userId) {
-    void updateOwnPresence(userId, "offline")
+    void updateOwnPresence(userId, "disconnected")
   }
 }
