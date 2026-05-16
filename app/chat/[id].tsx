@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, ScrollView, Text, View } from "react-native"
+import { KeyboardAvoidingView, Platform, StyleSheet, ScrollView, Text, View } from "react-native"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 import { supabase } from "@/lib/supabase"
@@ -126,24 +126,6 @@ export default function ChatScreenIntegrated() {
     router.replace("/login")
   }
 
-  function startCallWithPresenceCheck(callType: "audio" | "video") {
-    const shouldWarn = otherPresence?.status !== "connected"
-
-    if (!shouldWarn) {
-      void startCall(callType)
-      return
-    }
-
-    Alert.alert(
-      "Membrul pare neconectat",
-      "Poți încerca apelul, dar este posibil să nu răspundă imediat. Poți trimite și un mesaj.",
-      [
-        { text: "Renunță", style: "cancel" },
-        { text: "Sună oricum", onPress: () => void startCall(callType) },
-      ]
-    )
-  }
-
   return (
     <AppShell padded={false}>
       <View style={styles.screen}>
@@ -159,8 +141,8 @@ export default function ChatScreenIntegrated() {
             <ChatHeaderActions
               menuOpen={menuOpen}
               setMenuOpen={setMenuOpen}
-              onStartAudio={() => startCallWithPresenceCheck("audio")}
-              onStartVideo={() => startCallWithPresenceCheck("video")}
+              onStartAudio={() => startCall("audio")}
+              onStartVideo={() => startCall("video")}
               onLogout={handleLogout}
               onOpenMessages={handleBackToInbox}
             />
@@ -171,7 +153,7 @@ export default function ChatScreenIntegrated() {
           <View style={styles.presenceRow}>
             <PresencePill presence={otherPresence} />
             {otherPresence.status !== "connected" ? (
-              <Text style={styles.presenceHint}>Apelul poate rămâne fără răspuns dacă membrul nu este conectat.</Text>
+              <Text style={styles.presenceHint}>Membrul pare neconectat. Poți suna, dar este posibil să nu răspundă imediat.</Text>
             ) : null}
           </View>
         ) : null}
