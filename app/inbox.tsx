@@ -5,9 +5,11 @@ import { Ionicons } from "@expo/vector-icons"
 import { AppShell } from "@/components/ui/AppShell"
 import { ScreenHeader } from "@/components/ui/ScreenHeader"
 import { BottomTabBar } from "@/components/ui/BottomTabBar"
+import { PresencePill } from "@/components/presence/PresencePill"
 import { supabase } from "@/lib/supabase"
 import { t } from "@/lib/i18n"
 import { gradientTextSeed, theme } from "@/lib/theme"
+import { fetchPresenceMap, getPresenceInfo, UserPresenceRow } from "@/lib/presence/userPresence"
 
 type ConversationRow = { id: string; created_at: string }
 type MemberRow = { member_id: string; name: string | null; alias: string | null; email: string | null }
@@ -17,6 +19,7 @@ type NotificationRefRow = { id: string; ref_id: string | null }
 
 type ConvCard = {
   id: string
+  otherUserId: string | null
   name: string
   email: string | null
   preview: string
@@ -35,6 +38,7 @@ export default function InboxScreen() {
   const [members, setMembers] = useState<MemberGroup[]>([])
   const [messages, setMessages] = useState<MessageRow[]>([])
   const [unreadByConv, setUnreadByConv] = useState<Record<string, number>>({})
+  const [presenceMap, setPresenceMap] = useState<Record<string, UserPresenceRow>>({})
 
   useEffect(() => {
     mountedRef.current = true
@@ -80,6 +84,7 @@ export default function InboxScreen() {
         setMembers([])
         setMessages([])
         setUnreadByConv({})
+        setPresenceMap({})
         return
       }
 
@@ -102,7 +107,16 @@ export default function InboxScreen() {
 
       if (!mountedRef.current) return
 
-      const [{ data: msgData }, { data: unreadNotifications }] = await Promise.all([
+      const otherUserIds = Array.from(
+        new Set(
+          memberGroups
+            .flatMap((group) => group.members)
+            .map((member) => member.member_id)
+            .filter((memberId) => memberId && memberId !== session.user.id)
+        )
+      )
+
+      const [{ data: msgData }, { data: unreadNotifications }, nextPresenceMap] = await Promise.all([
         supabase
           .from("messages")
           .select("id, conversation_id, body, created_at")
@@ -114,6 +128,7 @@ export default function InboxScreen() {
           .eq("event_type", "new_message")
           .eq("is_read", false)
           .eq("user_id", session.user.id),
+        fetchPresenceMap(otherUserIds),
       ])
 
       if (!mountedRef.current) return
@@ -142,6 +157,7 @@ export default function InboxScreen() {
       setMembers(memberGroups)
       setMessages((msgData ?? []) as MessageRow[])
       setUnreadByConv(unreadMap)
+      setPresenceMap(nextPresenceMap)
     } catch (error) {
       console.warn("Inbox load failed", error)
     } finally {
@@ -162,6 +178,9 @@ export default function InboxScreen() {
         if (active && mountedRef.current) load()
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => {
+        if (active && mountedRef.current) load()
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_presence" }, () => {
         if (active && mountedRef.current) load()
       })
 
@@ -187,6 +206,7 @@ export default function InboxScreen() {
         const latest = messages.find((m) => m.conversation_id === conv.id)
         return {
           id: conv.id,
+          otherUserId: other?.member_id ?? null,
           name: other?.name?.trim() || other?.alias?.trim() || other?.email?.trim() || "Membru",
           email: other?.email?.trim() || null,
           preview: latest?.body || "Fără mesaje",
@@ -227,25 +247,29 @@ export default function InboxScreen() {
           ) : filtered.length === 0 ? (
             <Text style={styles.helper}>{t("noConversations")}</Text>
           ) : (
-            filtered.map((card) => (
-              <Pressable key={card.id} onPress={() => openChat(card.id)} style={({ pressed }) => [styles.convCard, card.unreadCount > 0 && styles.convCardUnread, pressed && styles.cardPressed]}>
-                <View style={styles.avatarCircle}>
-                  <Text style={styles.avatarText}>{gradientTextSeed(card.email || card.name)}</Text>
-                </View>
-                <View style={styles.convBody}>
-                  <View style={styles.convTop}>
-                    <Text numberOfLines={1} style={[styles.convName, card.unreadCount > 0 && styles.convNameUnread]}>{card.name}</Text>
-                    <Text style={styles.convDate}>{new Date(card.date).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" })}</Text>
+            filtered.map((card) => {
+              const presence = card.otherUserId ? getPresenceInfo(card.otherUserId, presenceMap[card.otherUserId]) : null
+              return (
+                <Pressable key={card.id} onPress={() => openChat(card.id)} style={({ pressed }) => [styles.convCard, card.unreadCount > 0 && styles.convCardUnread, pressed && styles.cardPressed]}>
+                  <View style={styles.avatarCircle}>
+                    <Text style={styles.avatarText}>{gradientTextSeed(card.email || card.name)}</Text>
                   </View>
-                  <View style={styles.previewRow}>
-                    <Text numberOfLines={1} style={[styles.convPreview, card.unreadCount > 0 && styles.convPreviewUnread]}>{card.preview}</Text>
-                    {card.unreadCount > 0 ? (
-                      <View style={styles.unreadBadge}><Text style={styles.unreadBadgeText}>{card.unreadCount > 99 ? "99+" : card.unreadCount}</Text></View>
-                    ) : null}
+                  <View style={styles.convBody}>
+                    <View style={styles.convTop}>
+                      <Text numberOfLines={1} style={[styles.convName, card.unreadCount > 0 && styles.convNameUnread]}>{card.name}</Text>
+                      <Text style={styles.convDate}>{new Date(card.date).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" })}</Text>
+                    </View>
+                    <PresencePill presence={presence} compact />
+                    <View style={styles.previewRow}>
+                      <Text numberOfLines={1} style={[styles.convPreview, card.unreadCount > 0 && styles.convPreviewUnread]}>{card.preview}</Text>
+                      {card.unreadCount > 0 ? (
+                        <View style={styles.unreadBadge}><Text style={styles.unreadBadgeText}>{card.unreadCount > 99 ? "99+" : card.unreadCount}</Text></View>
+                      ) : null}
+                    </View>
                   </View>
-                </View>
-              </Pressable>
-            ))
+                </Pressable>
+              )
+            })
           )}
         </ScrollView>
       </View>
@@ -318,7 +342,7 @@ const styles = StyleSheet.create({
   },
   convBody: {
     flex: 1,
-    gap: 6,
+    gap: 5,
   },
   convTop: {
     flexDirection: "row",
