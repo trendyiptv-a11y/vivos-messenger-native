@@ -4,6 +4,7 @@ type LocaleKey = "ro" | "da" | "en"
 
 type TranslationKey =
   | "messages"
+  | "members"
   | "calls"
   | "profile"
   | "searchConversations"
@@ -28,6 +29,7 @@ type TranslationKey =
 const translations: Record<LocaleKey, Record<TranslationKey, string>> = {
   ro: {
     messages: "Mesaje",
+    members: "Membri",
     calls: "Apeluri",
     profile: "Profil",
     searchConversations: "Caută conversații...",
@@ -51,6 +53,7 @@ const translations: Record<LocaleKey, Record<TranslationKey, string>> = {
   },
   da: {
     messages: "Beskeder",
+    members: "Medlemmer",
     calls: "Opkald",
     profile: "Profil",
     searchConversations: "Søg i samtaler...",
@@ -74,6 +77,7 @@ const translations: Record<LocaleKey, Record<TranslationKey, string>> = {
   },
   en: {
     messages: "Messages",
+    members: "Members",
     calls: "Calls",
     profile: "Profile",
     searchConversations: "Search conversations...",
