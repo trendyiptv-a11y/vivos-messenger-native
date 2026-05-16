@@ -14,6 +14,8 @@ import {
 import { stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
 import { registerVivosCallV2FcmForegroundHandler } from "@/lib/calls-v2/fcmCallHandler"
 import { consumePendingCallNotificationRoute } from "@/lib/calls-v2/callNotificationRoute"
+import { startPresenceHeartbeat, stopPresenceHeartbeat } from "@/lib/presence/userPresence"
+import { supabase } from "@/lib/supabase"
 import { theme } from "@/lib/theme"
 
 export default function RootLayout() {
@@ -60,6 +62,25 @@ export default function RootLayout() {
 
     return () => subscription.remove()
   }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated || loading) {
+      stopPresenceHeartbeat()
+      return
+    }
+
+    let cancelled = false
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return
+      startPresenceHeartbeat(data.session?.user?.id ?? null)
+    })
+
+    return () => {
+      cancelled = true
+      stopPresenceHeartbeat()
+    }
+  }, [isAuthenticated, loading])
 
   useEffect(() => {
     if (!isAuthenticated || loading) return
