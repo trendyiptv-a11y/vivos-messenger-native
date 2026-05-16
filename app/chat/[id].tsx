@@ -16,7 +16,7 @@ import {
   clearActiveVivosCallConversation,
   setActiveVivosCallConversation,
 } from "@/lib/calls-v2/activeCallRuntime"
-import { fetchPresenceMap, getPresenceInfo, UserPresenceRow } from "@/lib/presence/userPresence"
+import { fetchPresenceMap, getPresenceInfo, updateOwnPresence, UserPresenceRow } from "@/lib/presence/userPresence"
 import { theme } from "@/lib/theme"
 import { unregisterPushToken } from "@/lib/notifications"
 
@@ -120,13 +120,14 @@ export default function ChatScreenIntegrated() {
   }
 
   async function handleLogout() {
+    await updateOwnPresence(userId, "disconnected")
     await unregisterPushToken()
     await supabase.auth.signOut()
     router.replace("/login")
   }
 
   function startCallWithPresenceCheck(callType: "audio" | "video") {
-    const shouldWarn = otherPresence?.status === "offline" || otherPresence?.status === "unknown"
+    const shouldWarn = otherPresence?.status !== "connected"
 
     if (!shouldWarn) {
       void startCall(callType)
@@ -134,7 +135,7 @@ export default function ChatScreenIntegrated() {
     }
 
     Alert.alert(
-      "Membrul pare offline",
+      "Membrul pare neconectat",
       "Poți încerca apelul, dar este posibil să nu răspundă imediat. Poți trimite și un mesaj.",
       [
         { text: "Renunță", style: "cancel" },
@@ -169,7 +170,7 @@ export default function ChatScreenIntegrated() {
         {otherPresence ? (
           <View style={styles.presenceRow}>
             <PresencePill presence={otherPresence} />
-            {otherPresence.status === "offline" || otherPresence.status === "unknown" ? (
+            {otherPresence.status !== "connected" ? (
               <Text style={styles.presenceHint}>Apelul poate rămâne fără răspuns dacă membrul nu este conectat.</Text>
             ) : null}
           </View>
