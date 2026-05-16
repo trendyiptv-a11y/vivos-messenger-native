@@ -6,6 +6,7 @@ import { theme } from "@/lib/theme"
 
 const items = [
   { key: "inbox", labelKey: "messages" as const, href: "/inbox", icon: "chatbubble-outline" as const, iconActive: "chatbubble" as const },
+  { key: "members", labelKey: "members" as const, href: "/members", icon: "people-outline" as const, iconActive: "people" as const },
   { key: "calls", labelKey: "calls" as const, href: "/calls", icon: "call-outline" as const, iconActive: "call" as const },
   { key: "profile", labelKey: "profile" as const, href: "/profile", icon: "person-outline" as const, iconActive: "person" as const },
 ]
@@ -42,7 +43,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingTop: 10,
     paddingBottom: 18,
     borderTopWidth: 1,
@@ -52,7 +53,7 @@ const styles = StyleSheet.create({
   item: {
     alignItems: "center",
     gap: 5,
-    minWidth: 72,
+    minWidth: 64,
   },
   itemPressed: {
     opacity: 0.75,
