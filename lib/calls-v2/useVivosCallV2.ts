@@ -58,6 +58,14 @@ import {
   setActiveVivosCallSession,
 } from "@/lib/calls-v2/activeCallRuntime"
 import { cancelVivosCallV2IncomingNotification } from "@/lib/calls-v2/notifeeCallV2"
+import {
+  createCallHistorySession,
+  markCallHistoryAccepted,
+  markCallHistoryCancelled,
+  markCallHistoryEnded,
+  markCallHistoryFailed,
+  markCallHistoryRejected,
+} from "@/lib/calls-v2/callHistory"
 
 type UseVivosCallV2Args = {
   conversationId: string
@@ -84,13 +92,48 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
     callSessionId: string | null
     callType: VivosCallType
     remoteUserId: string | null
+    historyId: string | null
+    historyFinalized: boolean
   }>({
     callSessionId: null,
     callType: "audio",
     remoteUserId: null,
+    historyId: null,
+    historyFinalized: false,
   })
 
   const pendingRemoteIceRef = useRef<VivosIceCandidate[]>([])
+
+  const finalizeHistory = useCallback((status: "accepted" | "ended" | "rejected" | "cancelled" | "failed") => {
+    const current = currentCallRef.current
+    if (!current.historyId) return
+
+    if (status !== "accepted" && current.historyFinalized) return
+
+    if (status === "accepted") {
+      void markCallHistoryAccepted(current.historyId)
+      return
+    }
+
+    current.historyFinalized = true
+
+    if (status === "ended") {
+      void markCallHistoryEnded(current.historyId)
+      return
+    }
+
+    if (status === "rejected") {
+      void markCallHistoryRejected(current.historyId)
+      return
+    }
+
+    if (status === "cancelled") {
+      void markCallHistoryCancelled(current.historyId)
+      return
+    }
+
+    void markCallHistoryFailed(current.historyId)
+  }, [])
 
   const refreshSnapshots = useCallback(() => {
     const media = getMediaSnapshot()
@@ -116,6 +159,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
         peer.iceConnectionState === "failed"
 
       if (peerFailed && next.status !== "failed") {
+        finalizeHistory("failed")
         next = failCallState(next, "Conexiunea WebRTC/ICE a eșuat")
       }
 
@@ -130,7 +174,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
     })
 
     return { media, peer }
-  }, [])
+  }, [finalizeHistory])
 
   const sendIceForCurrentCall = useCallback(
     async (candidate: VivosIceCandidate) => {
@@ -199,6 +243,8 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
       callSessionId: null,
       callType: "audio",
       remoteUserId: null,
+      historyId: null,
+      historyFinalized: false,
     }
   }, [])
 
@@ -250,6 +296,8 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
             callSessionId: signal.callSessionId,
             callType: signal.callType,
             remoteUserId: signal.fromUserId,
+            historyId: null,
+            historyFinalized: false,
           }
           markActiveCallSession(signal.callSessionId)
           void cancelVivosCallV2IncomingNotification()
@@ -270,6 +318,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
           const current = currentCallRef.current
           if (signal.callSessionId !== current.callSessionId) return
 
+          finalizeHistory("accepted")
           void cancelVivosCallV2IncomingNotification()
           setCallState((state) => setCallStatus(state, "connecting", "Accept primit, creez offer"))
 
@@ -294,6 +343,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
           const current = currentCallRef.current
           if (signal.callSessionId !== current.callSessionId) return
 
+          finalizeHistory("rejected")
           await cleanupMediaAndPeer()
           await cancelVivosCallV2IncomingNotification()
           setCallState((state) => setCallStatus(state, "rejected", "Apel respins"))
@@ -304,6 +354,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
           const current = currentCallRef.current
           if (current.callSessionId && signal.callSessionId !== current.callSessionId) return
 
+          finalizeHistory("ended")
           await cleanupMediaAndPeer()
           await cancelVivosCallV2IncomingNotification()
           setCallState((state) => endCallState(state, "Apel închis de celălalt utilizator"))
@@ -365,10 +416,11 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
       } catch (error) {
         console.warn("V2 signal handling failed", error)
         const message = error instanceof Error ? error.message : String(error)
+        finalizeHistory("failed")
         setCallState((state) => failCallState(state, message))
       }
     },
-    [applyPendingIce, cleanupMediaAndPeer, conversationId, markActiveCallSession, refreshSnapshots, userId]
+    [applyPendingIce, cleanupMediaAndPeer, conversationId, finalizeHistory, markActiveCallSession, refreshSnapshots, userId]
   )
 
   useEffect(() => {
@@ -435,6 +487,8 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
         callSessionId,
         callType,
         remoteUserId,
+        historyId: null,
+        historyFinalized: false,
       }
       markActiveCallSession(callSessionId)
 
@@ -448,6 +502,17 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
       )
 
       try {
+        createCallHistorySession({
+          conversationId,
+          callerId: userId,
+          calleeId: remoteUserId,
+          callType,
+        }).then((result) => {
+          if (result.historyId && currentCallRef.current.callSessionId === callSessionId) {
+            currentCallRef.current.historyId = result.historyId
+          }
+        })
+
         await prepareLocalPeer(callType)
 
         await sendVivosCallInvite({
@@ -473,12 +538,13 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
       } catch (error) {
         console.warn("V2 startCall failed", error)
         const message = error instanceof Error ? error.message : String(error)
+        finalizeHistory("failed")
         await cleanupMediaAndPeer()
         setCallState((state) => failCallState(state, message))
         return false
       }
     },
-    [cleanupMediaAndPeer, conversationId, markActiveCallSession, prepareLocalPeer, remoteUserId, selfName, userId]
+    [cleanupMediaAndPeer, conversationId, finalizeHistory, markActiveCallSession, prepareLocalPeer, remoteUserId, selfName, userId]
   )
 
   const acceptCall = useCallback(async () => {
@@ -556,6 +622,8 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
       callSessionId: call.callSessionId,
       callType: call.callType,
       remoteUserId: call.fromUserId,
+      historyId: null,
+      historyFinalized: false,
     }
     markActiveCallSession(call.callSessionId)
 
@@ -586,6 +654,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
 
     const current = { ...currentCallRef.current }
 
+    finalizeHistory("ended")
     await cancelVivosCallV2IncomingNotification()
     await cleanupMediaAndPeer()
     setCallState((state) => endCallState(state, "Apel închis"))
@@ -604,7 +673,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
 
       void notifyCancelForCurrentCall(current)
     }
-  }, [cleanupMediaAndPeer, conversationId, notifyCancelForCurrentCall, userId])
+  }, [cleanupMediaAndPeer, conversationId, finalizeHistory, notifyCancelForCurrentCall, userId])
 
   const toggleMicrophone = useCallback(() => {
     const media = getMediaSnapshot()
@@ -653,10 +722,11 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
   }, [])
 
   const reset = useCallback(async () => {
+    finalizeHistory("cancelled")
     await cleanupMediaAndPeer()
     await cancelVivosCallV2IncomingNotification()
     setCallState(createIdleCallState())
-  }, [cleanupMediaAndPeer])
+  }, [cleanupMediaAndPeer, finalizeHistory])
 
   return {
     callState,
