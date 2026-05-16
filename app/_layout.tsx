@@ -149,6 +149,7 @@ export default function RootLayout() {
         <Stack.Screen name="login" />
         <Stack.Screen name="signup" />
         <Stack.Screen name="inbox" />
+        <Stack.Screen name="members" />
         <Stack.Screen name="calls" />
         <Stack.Screen name="profile" />
         <Stack.Screen name="chat/[id]" />
