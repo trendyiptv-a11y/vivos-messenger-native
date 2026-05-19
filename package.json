@@ -24,7 +24,7 @@
     "@react-native-firebase/app": "^24.0.0",
     "@react-native-firebase/messaging": "^24.0.0",
     "@react-native-masked-view/masked-view": "^0.3.2",
-    "@supabase/supabase-js": "^2.49.8",
+    "@supabase/supabase-js": "2.49.8",
     "event-target-shim": "^6.0.2",
     "expo": "~53.0.12",
     "expo-asset": "~11.1.7",
