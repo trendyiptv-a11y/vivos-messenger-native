@@ -14,7 +14,6 @@ import {
 import { stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
 import { registerVivosCallV2FcmForegroundHandler } from "@/lib/calls-v2/fcmCallHandler"
 import { consumePendingCallNotificationRoute } from "@/lib/calls-v2/callNotificationRoute"
-import { setPendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
 import { startPresenceHeartbeat, stopPresenceHeartbeat } from "@/lib/presence/userPresence"
 import { supabase } from "@/lib/supabase"
 import { theme } from "@/lib/theme"
@@ -32,16 +31,6 @@ export default function RootLayout() {
     if (route.action === "reject") {
       return
     }
-
-    setPendingVivosCallFromNotification(
-      {
-        conversationId: route.conversationId,
-        callSessionId: route.callSessionId,
-        fromUserId: route.fromUserId,
-        callType: route.callType,
-      },
-      route.action
-    )
 
     router.push({ pathname: "/chat/[id]", params: { id: route.conversationId } })
   }, [router])
