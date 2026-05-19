@@ -7,6 +7,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader"
 import { BottomTabBar } from "@/components/ui/BottomTabBar"
 import { PresencePill } from "@/components/presence/PresencePill"
 import { supabase } from "@/lib/supabase"
+import { t } from "@/lib/i18n"
 import { gradientTextSeed, theme } from "@/lib/theme"
 import { getOrCreateDirectConversation } from "@/lib/messenger/conversations"
 import { fetchPresenceMap, getPresenceInfo, UserPresenceRow } from "@/lib/presence/userPresence"
@@ -19,7 +20,7 @@ type ProfileRow = {
 }
 
 function displayMember(profile: ProfileRow) {
-  return profile.name?.trim() || profile.alias?.trim() || profile.email?.split("@")[0] || "Membru"
+  return profile.name?.trim() || profile.alias?.trim() || profile.email?.split("@")[0] || t("memberFallback")
 }
 
 export default function MembersScreen() {
@@ -79,7 +80,7 @@ export default function MembersScreen() {
     } catch (error) {
       console.warn("Members load failed", error)
       if (mountedRef.current) {
-        setMessage(error instanceof Error ? error.message : "Membrii nu au putut fi încărcați.")
+        setMessage(error instanceof Error ? error.message : t("noMembers"))
       }
     } finally {
       if (mountedRef.current) setLoading(false)
@@ -128,7 +129,7 @@ export default function MembersScreen() {
       router.push(`/chat/${conversationId}`)
     } catch (error) {
       console.warn("Open member failed", error)
-      setMessage(error instanceof Error ? error.message : "Conversația nu a putut fi deschisă.")
+      setMessage(error instanceof Error ? error.message : t("conversationOpenError"))
     } finally {
       if (mountedRef.current) setOpeningId(null)
     }
@@ -136,14 +137,14 @@ export default function MembersScreen() {
 
   return (
     <AppShell padded={false}>
-      <ScreenHeader eyebrow="VIVOS" title="Membri" />
+      <ScreenHeader eyebrow="VIVOS" title={t("members")} />
       <View style={styles.content}>
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={18} color={theme.colors.textDim} />
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Caută membri..."
+            placeholder={t("searchMembers")}
             placeholderTextColor={theme.colors.textDim}
             style={styles.searchInput}
           />
@@ -153,9 +154,9 @@ export default function MembersScreen() {
 
         <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
           {loading ? (
-            <Text style={styles.helper}>Se încarcă membrii...</Text>
+            <Text style={styles.helper}>{t("loadingMembers")}</Text>
           ) : filtered.length === 0 ? (
-            <Text style={styles.helper}>Nu există membri pentru căutarea curentă.</Text>
+            <Text style={styles.helper}>{t("noMembers")}</Text>
           ) : (
             filtered.map((member) => {
               const name = displayMember(member)
@@ -179,8 +180,8 @@ export default function MembersScreen() {
                       <Ionicons name="chatbubble-ellipses-outline" size={20} color={theme.colors.textSoft} />
                     </View>
                     <PresencePill presence={presence} compact />
-                    <Text numberOfLines={1} style={styles.memberEmail}>{member.email || member.alias || "Membru VIVOS"}</Text>
-                    {opening ? <Text style={styles.openingText}>Se deschide conversația...</Text> : null}
+                    <Text numberOfLines={1} style={styles.memberEmail}>{member.email || member.alias || t("memberFallback")}</Text>
+                    {opening ? <Text style={styles.openingText}>{t("openingConversation")}</Text> : null}
                   </View>
                 </Pressable>
               )
