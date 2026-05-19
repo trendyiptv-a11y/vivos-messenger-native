@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native"
 import { UserPresenceInfo } from "@/lib/presence/userPresence"
+import { t } from "@/lib/i18n"
 import { theme } from "@/lib/theme"
 
 type Props = {
@@ -8,15 +9,17 @@ type Props = {
 }
 
 function colorForStatus(status?: string) {
-  if (status === "online") return "#34D399"
-  if (status === "recent") return "#FBBF24"
-  if (status === "offline") return "#94A3B8"
-  return "#64748B"
+  if (status === "connected") return "#34D399"
+  return "#94A3B8"
+}
+
+function labelForStatus(status?: string) {
+  return status === "connected" ? t("connected") : t("disconnected")
 }
 
 export function PresencePill({ presence, compact = false }: Props) {
-  const status = presence?.status || "unknown"
-  const label = presence?.label || "Status necunoscut"
+  const status = presence?.status || "disconnected"
+  const label = labelForStatus(status)
   const color = colorForStatus(status)
 
   return (
