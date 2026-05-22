@@ -20,9 +20,6 @@ jobs:
   build-android-aab:
     name: Build Android App Bundle with EAS
     runs-on: ubuntu-latest
-    env:
-      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
 
     steps:
       - name: Checkout repository
@@ -49,8 +46,6 @@ jobs:
           test -f google-services.json
           test -f assets/images/icon.png
           test -f assets/images/splash-icon.png
-          test -n "$EXPO_PUBLIC_SUPABASE_URL"
-          test -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
 
       - name: Build Android production AAB
         run: |
