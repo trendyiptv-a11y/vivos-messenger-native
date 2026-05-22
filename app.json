@@ -4,7 +4,7 @@
     "name": "VIVOS Messenger",
     "slug": "vivos-messenger-native",
     "scheme": "vivosmessenger",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/images/icon.png",
@@ -25,6 +25,7 @@
     },
     "android": {
       "package": "app.vivos.messenger",
+      "versionCode": 3,
       "googleServicesFile": "./google-services.json",
       "icon": "./assets/images/icon.png",
       "adaptiveIcon": {
