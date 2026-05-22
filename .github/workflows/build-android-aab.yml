@@ -20,6 +20,9 @@ jobs:
   build-android-aab:
     name: Build Android App Bundle with EAS
     runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
 
     steps:
       - name: Checkout repository
@@ -38,6 +41,31 @@ jobs:
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Inject Supabase env into selected EAS profile
+        run: |
+          node - <<'NODE'
+          const fs = require('fs')
+          const profile = process.env.EAS_BUILD_PROFILE || 'production'
+          const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || ''
+          const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || ''
+
+          if (!supabaseUrl || !supabaseAnonKey) {
+            throw new Error('Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY GitHub secret')
+          }
+
+          const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'))
+          eas.build = eas.build || {}
+          eas.build[profile] = eas.build[profile] || {}
+          eas.build[profile].env = {
+            ...(eas.build[profile].env || {}),
+            EXPO_PUBLIC_SUPABASE_URL: supabaseUrl,
+            EXPO_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey,
+          }
+          fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2))
+          NODE
+        env:
+          EAS_BUILD_PROFILE: ${{ inputs.profile }}
 
       - name: Verify Expo project assets
         run: |
