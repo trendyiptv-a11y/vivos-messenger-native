@@ -137,7 +137,7 @@ export default function MembersScreen() {
 
   return (
     <AppShell padded={false}>
-      <ScreenHeader eyebrow="VIVOS" title={t("members")} />
+      <ScreenHeader eyebrow="VIVOS Messenger" title={t("members")} />
       <View style={styles.content}>
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={18} color={theme.colors.textDim} />
