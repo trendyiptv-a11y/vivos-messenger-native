@@ -234,7 +234,7 @@ export default function InboxScreen() {
 
   return (
     <AppShell padded={false}>
-      <ScreenHeader eyebrow="VIVOS" title="Messenger" />
+      <ScreenHeader eyebrow="VIVOS Messenger" title={t("messages")} />
       <View style={styles.content}>
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={18} color={theme.colors.textDim} />
