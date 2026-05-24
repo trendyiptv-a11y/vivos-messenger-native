@@ -18,7 +18,8 @@ export type UserPresenceInfo = {
   lastSeenAt: string | null
 }
 
-const DISCONNECTED_AFTER_MS = 90 * 24 * 60 * 60 * 1000
+const CONNECTED_HEARTBEAT_TTL_MS = 2 * 60 * 1000
+const STALE_PRESENCE_AFTER_MS = 90 * 24 * 60 * 60 * 1000
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 let appStateSubscription: { remove: () => void } | null = null
 let activeUserId: string | null = null
@@ -47,16 +48,26 @@ export function getPresenceInfo(userId: string, row?: UserPresenceRow | null, no
 
   const ageMs = now - new Date(lastSeenAt).getTime()
   const normalizedStatus = normalizeWriteStatus(row?.status)
+  const hasValidAge = Number.isFinite(ageMs) && ageMs >= 0
 
   if (
     normalizedStatus === "connected" &&
-    Number.isFinite(ageMs) &&
-    ageMs <= DISCONNECTED_AFTER_MS
+    hasValidAge &&
+    ageMs <= CONNECTED_HEARTBEAT_TTL_MS
   ) {
     return {
       userId,
       status: "connected",
       label: "Conectat",
+      lastSeenAt,
+    }
+  }
+
+  if (!hasValidAge || ageMs > STALE_PRESENCE_AFTER_MS) {
+    return {
+      userId,
+      status: "disconnected",
+      label: "Neconectat",
       lastSeenAt,
     }
   }
