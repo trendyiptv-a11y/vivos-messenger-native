@@ -4,7 +4,7 @@
     "name": "VIVOS Messenger",
     "slug": "vivos-messenger-native",
     "scheme": "vivosmessenger",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/images/icon.png",
@@ -17,6 +17,7 @@
       "**/*"
     ],
     "ios": {
+      "bundleIdentifier": "app.vivos.messenger",
       "supportsTablet": false,
       "infoPlist": {
         "NSCameraUsageDescription": "VIVOS Messenger folosește camera pentru apeluri video.",
@@ -25,7 +26,7 @@
     },
     "android": {
       "package": "app.vivos.messenger",
-      "versionCode": 5,
+      "versionCode": 7,
       "googleServicesFile": "./google-services.json",
       "icon": "./assets/images/icon.png",
       "adaptiveIcon": {
@@ -63,9 +64,7 @@
           "cameraPermission": "Permite VIVOS Messenger să folosească camera pentru apeluri video.",
           "microphonePermission": "Permite VIVOS Messenger să folosească microfonul pentru apeluri audio și video."
         }
-      ],
-      "@react-native-firebase/app",
-      "@react-native-firebase/messaging"
+      ]
     ],
     "experiments": {
       "typedRoutes": true
