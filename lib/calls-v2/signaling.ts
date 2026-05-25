@@ -16,7 +16,28 @@ type CreateCallSignalPayloadArgs = {
   candidate?: VivosIceCandidate
 }
 
+const SIGNAL_CHANNEL_WAIT_ATTEMPTS = 8
+const SIGNAL_CHANNEL_WAIT_MS = 150
+const SIGNAL_SEND_RETRY_ATTEMPTS = 3
+const SIGNAL_SEND_RETRY_MS = 220
+
 let activeChannel: RealtimeChannel | null = null
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function waitForVivosCallChannel(initialChannel: RealtimeChannel | null) {
+  if (initialChannel) return initialChannel
+  if (activeChannel) return activeChannel
+
+  for (let attempt = 0; attempt < SIGNAL_CHANNEL_WAIT_ATTEMPTS; attempt += 1) {
+    await sleep(SIGNAL_CHANNEL_WAIT_MS)
+    if (activeChannel) return activeChannel
+  }
+
+  return null
+}
 
 export function buildVivosCallSignalPayload(args: CreateCallSignalPayloadArgs): VivosCallSignalPayload {
   return {
@@ -146,18 +167,43 @@ export async function sendVivosCallSignal(
   channel: RealtimeChannel | null,
   payload: VivosCallSignalPayload
 ) {
-  if (!channel) {
+  const resolvedChannel = await waitForVivosCallChannel(channel)
+
+  if (!resolvedChannel) {
     console.warn("sendVivosCallSignal skipped: missing channel", payload.type)
     return { ok: false, reason: "missing-channel" }
   }
 
-  const result = await channel.send({
-    type: "broadcast",
-    event: payload.type,
-    payload,
-  })
+  let lastResult: unknown = null
 
-  return result
+  for (let attempt = 0; attempt < SIGNAL_SEND_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      const result = await resolvedChannel.send({
+        type: "broadcast",
+        event: payload.type,
+        payload,
+      })
+
+      lastResult = result
+
+      if (result === "ok" || result === "timed out") {
+        return result
+      }
+
+      if (attempt < SIGNAL_SEND_RETRY_ATTEMPTS - 1) {
+        await sleep(SIGNAL_SEND_RETRY_MS)
+      }
+    } catch (error) {
+      lastResult = error
+
+      if (attempt < SIGNAL_SEND_RETRY_ATTEMPTS - 1) {
+        await sleep(SIGNAL_SEND_RETRY_MS)
+      }
+    }
+  }
+
+  console.warn("sendVivosCallSignal failed after retry", payload.type, lastResult)
+  return lastResult
 }
 
 export async function sendVivosCallInvite(args: {
