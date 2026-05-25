@@ -20,6 +20,7 @@
       "bundleIdentifier": "app.vivos.messenger",
       "supportsTablet": false,
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "VIVOS Messenger folosește camera pentru apeluri video.",
         "NSMicrophoneUsageDescription": "VIVOS Messenger folosește microfonul pentru apeluri audio și video."
       }
