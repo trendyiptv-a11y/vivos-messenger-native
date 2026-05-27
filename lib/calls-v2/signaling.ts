@@ -1,5 +1,6 @@
 import { RealtimeChannel } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
+import { updateOwnPresence } from "@/lib/presence/userPresence"
 import { VivosCallSignalPayload, VivosCallSignalType, VivosCallType } from "@/lib/calls-v2/types"
 import { VivosIceCandidate, VivosSessionDescription } from "@/lib/calls-v2/peer"
 
@@ -235,6 +236,10 @@ export async function sendVivosCallAccept(args: {
   toUserId?: string | null
   callType: VivosCallType
 }) {
+  await updateOwnPresence(args.fromUserId, "connected").catch((error) => {
+    console.warn("sendVivosCallAccept presence refresh failed", error)
+  })
+
   return sendVivosCallSignal(
     args.channel,
     buildVivosCallSignalPayload({
