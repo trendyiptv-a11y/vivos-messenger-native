@@ -52,7 +52,12 @@ import {
   toggleVivosSpeaker,
 } from "@/lib/calls-v2/audioRoute"
 import { notifyVivosCallV2, notifyVivosCallV2Cancelled } from "@/lib/calls-v2/callNotify"
-import { consumePendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
+import {
+  consumePendingVivosCallFromNotification,
+  PendingVivosCallFromNotification,
+  VivosCallNotificationAction,
+} from "@/lib/calls-v2/callNotificationState"
+import { consumePendingCallNotificationRoute } from "@/lib/calls-v2/callNotificationRoute"
 import {
   clearActiveVivosCallSession,
   setActiveVivosCallSession,
@@ -74,6 +79,13 @@ type UseVivosCallV2Args = {
   remoteName?: string
   selfName?: string
 }
+
+type PendingNotificationCall = {
+  call: PendingVivosCallFromNotification
+  action: VivosCallNotificationAction
+}
+
+const NOTIFICATION_CALL_ACTION_DELAY_MS = 250
 
 function createCallSessionId() {
   return `vivos-call-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
@@ -608,44 +620,71 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
   useEffect(() => {
     if (!conversationId || !userId) return
 
-    const pending = consumePendingVivosCallFromNotification(conversationId)
-    if (!pending) return
+    let cancelled = false
+    let actionTimer: ReturnType<typeof setTimeout> | null = null
 
-    if (currentCallRef.current.callSessionId) {
-      void cancelVivosCallV2IncomingNotification()
-      return
+    async function getPendingNotificationCall(): Promise<PendingNotificationCall | null> {
+      const memoryPending = consumePendingVivosCallFromNotification(conversationId)
+      if (memoryPending) return memoryPending
+
+      const route = await consumePendingCallNotificationRoute()
+      if (!route || route.conversationId !== conversationId) return null
+
+      return {
+        call: {
+          conversationId: route.conversationId,
+          callSessionId: route.callSessionId,
+          fromUserId: route.fromUserId,
+          callType: route.callType,
+        },
+        action: route.action,
+      }
     }
 
-    const { call, action } = pending
+    void getPendingNotificationCall().then((pending) => {
+      if (cancelled || !pending) return
 
-    currentCallRef.current = {
-      callSessionId: call.callSessionId,
-      callType: call.callType,
-      remoteUserId: call.fromUserId,
-      historyId: null,
-      historyFinalized: false,
-    }
-    markActiveCallSession(call.callSessionId)
+      if (currentCallRef.current.callSessionId) {
+        void cancelVivosCallV2IncomingNotification()
+        return
+      }
 
-    setCallState(
-      startIncomingCallState({
+      const { call, action } = pending
+
+      currentCallRef.current = {
         callSessionId: call.callSessionId,
-        conversationId: call.conversationId,
-        remoteUserId: call.fromUserId,
         callType: call.callType,
-      })
-    )
+        remoteUserId: call.fromUserId,
+        historyId: null,
+        historyFinalized: false,
+      }
+      markActiveCallSession(call.callSessionId)
 
-    if (action === "accept") {
-      setTimeout(() => {
-        void acceptCall()
-      }, 250)
-    }
+      setCallState(
+        startIncomingCallState({
+          callSessionId: call.callSessionId,
+          conversationId: call.conversationId,
+          remoteUserId: call.fromUserId,
+          callType: call.callType,
+        })
+      )
 
-    if (action === "reject") {
-      setTimeout(() => {
-        void rejectCall()
-      }, 250)
+      if (action === "accept") {
+        actionTimer = setTimeout(() => {
+          void acceptCall()
+        }, NOTIFICATION_CALL_ACTION_DELAY_MS)
+      }
+
+      if (action === "reject") {
+        actionTimer = setTimeout(() => {
+          void rejectCall()
+        }, NOTIFICATION_CALL_ACTION_DELAY_MS)
+      }
+    })
+
+    return () => {
+      cancelled = true
+      if (actionTimer) clearTimeout(actionTimer)
     }
   }, [acceptCall, conversationId, markActiveCallSession, rejectCall, userId])
 
