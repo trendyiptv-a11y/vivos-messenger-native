@@ -23,21 +23,33 @@ const SIGNAL_SEND_RETRY_ATTEMPTS = 3
 const SIGNAL_SEND_RETRY_MS = 220
 
 let activeChannel: RealtimeChannel | null = null
+const channelStatuses = new WeakMap<RealtimeChannel, string>()
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function isChannelSubscribed(channel: RealtimeChannel | null) {
+  return Boolean(channel && channelStatuses.get(channel) === "SUBSCRIBED")
+}
+
 async function waitForVivosCallChannel(initialChannel: RealtimeChannel | null) {
-  if (initialChannel) return initialChannel
-  if (activeChannel) return activeChannel
+  let candidate = initialChannel || activeChannel
+
+  if (isChannelSubscribed(candidate)) return candidate
 
   for (let attempt = 0; attempt < SIGNAL_CHANNEL_WAIT_ATTEMPTS; attempt += 1) {
     await sleep(SIGNAL_CHANNEL_WAIT_MS)
-    if (activeChannel) return activeChannel
+    candidate = initialChannel || activeChannel
+
+    if (isChannelSubscribed(candidate)) return candidate
   }
 
-  return null
+  if (candidate) {
+    console.warn("sendVivosCallSignal using channel before SUBSCRIBED", channelStatuses.get(candidate) || "UNKNOWN")
+  }
+
+  return candidate
 }
 
 export function buildVivosCallSignalPayload(args: CreateCallSignalPayloadArgs): VivosCallSignalPayload {
@@ -67,6 +79,7 @@ export async function closeVivosCallChannel() {
 
   const channel = activeChannel
   activeChannel = null
+  channelStatuses.delete(channel)
 
   await supabase.removeChannel(channel).catch((error) => {
     console.warn("closeVivosCallChannel failed", error)
@@ -127,10 +140,12 @@ export function createVivosCallChannel(args: {
       await onSignal(signal)
     })
     .subscribe((status) => {
+      channelStatuses.set(channel, status)
       console.log("VIVOS call v2 channel status:", status)
     })
 
   activeChannel = channel
+  channelStatuses.set(channel, "CREATED")
 
   return {
     channel,
@@ -140,6 +155,8 @@ export function createVivosCallChannel(args: {
       if (activeChannel === channel) {
         activeChannel = null
       }
+
+      channelStatuses.delete(channel)
 
       await supabase.removeChannel(channel).catch((error) => {
         console.warn("VIVOS call v2 channel cleanup failed", error)
