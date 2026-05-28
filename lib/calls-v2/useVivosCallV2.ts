@@ -85,7 +85,7 @@ type PendingNotificationCall = {
   action: VivosCallNotificationAction
 }
 
-const NOTIFICATION_CALL_ACTION_DELAY_MS = 250
+const NOTIFICATION_CALL_ACTION_DELAY_MS = 1400
 
 function createCallSessionId() {
   return `vivos-call-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
@@ -568,7 +568,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
     try {
       await cancelVivosCallV2IncomingNotification()
       markActiveCallSession(current.callSessionId)
-      setCallState((state) => setCallStatus(state, "connecting", "Accept apel"))
+      setCallState((state) => setCallStatus(state, "connecting", "Pregătesc apelul..."))
 
       await prepareLocalPeer(current.callType)
 
@@ -670,6 +670,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
       )
 
       if (action === "accept") {
+        setCallState((state) => setCallStatus(state, "connecting", "Pregătesc apelul..."))
         actionTimer = setTimeout(() => {
           void acceptCall()
         }, NOTIFICATION_CALL_ACTION_DELAY_MS)
