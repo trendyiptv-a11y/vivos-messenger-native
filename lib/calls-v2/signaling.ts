@@ -17,13 +17,27 @@ type CreateCallSignalPayloadArgs = {
   candidate?: VivosIceCandidate
 }
 
+type StoredVivosCallSignalRow = {
+  id?: string
+  payload?: VivosCallSignalPayload | null
+  created_at?: string | null
+}
+
+const SIGNAL_STORE_TABLE = "vivos_call_signals"
 const SIGNAL_CHANNEL_WAIT_ATTEMPTS = 40
 const SIGNAL_CHANNEL_WAIT_MS = 200
+const SIGNAL_BROADCAST_FAST_WAIT_ATTEMPTS = 6
 const SIGNAL_SEND_RETRY_ATTEMPTS = 3
 const SIGNAL_SEND_RETRY_MS = 220
+const STORED_SIGNAL_LOOKBACK_MS = 2 * 60 * 1000
+const STORED_SIGNAL_DRAIN_LIMIT = 160
+const STORED_SIGNAL_DRAIN_INTERVAL_MS = 700
+const STORED_SIGNAL_DRAIN_TICKS = 10
+const STORED_SIGNAL_TTL_MS = 5 * 60 * 1000
 
 let activeChannel: RealtimeChannel | null = null
 const channelStatuses = new WeakMap<RealtimeChannel, string>()
+const processedSignalKeys = new Set<string>()
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -38,20 +52,113 @@ function getChannelStatus(channel: RealtimeChannel | null) {
   return channelStatuses.get(channel) || "UNKNOWN"
 }
 
-async function waitForVivosCallChannel(initialChannel: RealtimeChannel | null) {
+async function waitForVivosCallChannel(initialChannel: RealtimeChannel | null, attempts = SIGNAL_CHANNEL_WAIT_ATTEMPTS) {
   let candidate = initialChannel || activeChannel
 
   if (isChannelSubscribed(candidate)) return candidate
 
-  for (let attempt = 0; attempt < SIGNAL_CHANNEL_WAIT_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     await sleep(SIGNAL_CHANNEL_WAIT_MS)
     candidate = initialChannel || activeChannel
 
     if (isChannelSubscribed(candidate)) return candidate
   }
 
-  console.warn("sendVivosCallSignal blocked until channel SUBSCRIBED, current status:", getChannelStatus(candidate))
+  console.warn("sendVivosCallSignal channel not SUBSCRIBED, current status:", getChannelStatus(candidate))
   return null
+}
+
+function getSignalDedupeKey(signal: VivosCallSignalPayload) {
+  const bodyKey = signal.sdp
+    ? JSON.stringify(signal.sdp).slice(0, 180)
+    : signal.candidate
+      ? JSON.stringify(signal.candidate).slice(0, 180)
+      : ""
+
+  return [
+    signal.type,
+    signal.callSessionId,
+    signal.conversationId,
+    signal.fromUserId,
+    signal.toUserId || "",
+    signal.createdAt || "",
+    bodyKey,
+  ].join("|")
+}
+
+function shouldProcessOnce(signal: VivosCallSignalPayload) {
+  const key = getSignalDedupeKey(signal)
+
+  if (processedSignalKeys.has(key)) return false
+
+  if (processedSignalKeys.size > 700) {
+    processedSignalKeys.clear()
+  }
+
+  processedSignalKeys.add(key)
+  return true
+}
+
+function signalFromStoredRow(row: StoredVivosCallSignalRow | null | undefined) {
+  const signal = row?.payload
+  if (!signal?.type || !signal.callSessionId || !signal.conversationId || !signal.fromUserId) return null
+  return signal
+}
+
+async function persistVivosCallSignal(payload: VivosCallSignalPayload) {
+  const expiresAt = new Date(Date.now() + STORED_SIGNAL_TTL_MS).toISOString()
+
+  const { error } = await supabase.from(SIGNAL_STORE_TABLE).insert({
+    call_session_id: payload.callSessionId,
+    conversation_id: payload.conversationId,
+    from_user_id: payload.fromUserId,
+    to_user_id: payload.toUserId ?? null,
+    signal_type: payload.type,
+    call_type: payload.callType,
+    payload,
+    expires_at: expiresAt,
+  })
+
+  if (error) {
+    console.warn("persistVivosCallSignal failed", error.message)
+    return false
+  }
+
+  return true
+}
+
+async function drainStoredVivosCallSignals(args: {
+  conversationId: string
+  userId: string
+  active: () => boolean
+  onSignal: SignalHandler
+}) {
+  const { conversationId, userId, active, onSignal } = args
+  const since = new Date(Date.now() - STORED_SIGNAL_LOOKBACK_MS).toISOString()
+
+  const { data, error } = await supabase
+    .from(SIGNAL_STORE_TABLE)
+    .select("id,payload,created_at")
+    .eq("conversation_id", conversationId)
+    .gte("created_at", since)
+    .order("created_at", { ascending: true })
+    .limit(STORED_SIGNAL_DRAIN_LIMIT)
+
+  if (error) {
+    console.warn("drainStoredVivosCallSignals failed", error.message)
+    return
+  }
+
+  for (const row of (data || []) as StoredVivosCallSignalRow[]) {
+    if (!active()) return
+
+    const signal = signalFromStoredRow(row)
+    if (!signal) continue
+    if (!shouldProcessSignal(signal, userId)) continue
+    if (!shouldProcessOnce(signal)) continue
+
+    await onSignal(signal)
+  }
 }
 
 export function buildVivosCallSignalPayload(args: CreateCallSignalPayloadArgs): VivosCallSignalPayload {
@@ -100,54 +207,75 @@ export function createVivosCallChannel(args: {
   const { conversationId, userId, onSignal } = args
 
   let active = true
+  let drainTimer: ReturnType<typeof setInterval> | null = null
+  let drainTicks = 0
+
+  const isActive = () => active
+
+  const processSignal = async (signal: VivosCallSignalPayload) => {
+    if (!active) return
+    if (!shouldProcessSignal(signal, userId)) return
+    if (!shouldProcessOnce(signal)) return
+    await onSignal(signal)
+  }
+
+  const startStoredSignalDrain = () => {
+    if (drainTimer) return
+
+    const runDrain = () => {
+      if (!active) return
+      drainTicks += 1
+      void drainStoredVivosCallSignals({ conversationId, userId, active: isActive, onSignal })
+
+      if (drainTicks >= STORED_SIGNAL_DRAIN_TICKS && drainTimer) {
+        clearInterval(drainTimer)
+        drainTimer = null
+      }
+    }
+
+    runDrain()
+    drainTimer = setInterval(runDrain, STORED_SIGNAL_DRAIN_INTERVAL_MS)
+  }
 
   const channel = supabase
     .channel(getVivosCallChannelName(conversationId))
     .on("broadcast", { event: "call_invite" }, async ({ payload }) => {
-      if (!active) return
-      const signal = payload as VivosCallSignalPayload
-      if (!shouldProcessSignal(signal, userId)) return
-      await onSignal(signal)
+      await processSignal(payload as VivosCallSignalPayload)
     })
     .on("broadcast", { event: "call_accept" }, async ({ payload }) => {
-      if (!active) return
-      const signal = payload as VivosCallSignalPayload
-      if (!shouldProcessSignal(signal, userId)) return
-      await onSignal(signal)
+      await processSignal(payload as VivosCallSignalPayload)
     })
     .on("broadcast", { event: "call_reject" }, async ({ payload }) => {
-      if (!active) return
-      const signal = payload as VivosCallSignalPayload
-      if (!shouldProcessSignal(signal, userId)) return
-      await onSignal(signal)
+      await processSignal(payload as VivosCallSignalPayload)
     })
     .on("broadcast", { event: "call_end" }, async ({ payload }) => {
-      if (!active) return
-      const signal = payload as VivosCallSignalPayload
-      if (!shouldProcessSignal(signal, userId)) return
-      await onSignal(signal)
+      await processSignal(payload as VivosCallSignalPayload)
     })
     .on("broadcast", { event: "webrtc_offer" }, async ({ payload }) => {
-      if (!active) return
-      const signal = payload as VivosCallSignalPayload
-      if (!shouldProcessSignal(signal, userId)) return
-      await onSignal(signal)
+      await processSignal(payload as VivosCallSignalPayload)
     })
     .on("broadcast", { event: "webrtc_answer" }, async ({ payload }) => {
-      if (!active) return
-      const signal = payload as VivosCallSignalPayload
-      if (!shouldProcessSignal(signal, userId)) return
-      await onSignal(signal)
+      await processSignal(payload as VivosCallSignalPayload)
     })
     .on("broadcast", { event: "ice_candidate" }, async ({ payload }) => {
-      if (!active) return
-      const signal = payload as VivosCallSignalPayload
-      if (!shouldProcessSignal(signal, userId)) return
-      await onSignal(signal)
+      await processSignal(payload as VivosCallSignalPayload)
     })
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: SIGNAL_STORE_TABLE, filter: `conversation_id=eq.${conversationId}` },
+      async ({ new: row }) => {
+        const signal = signalFromStoredRow(row as StoredVivosCallSignalRow)
+        if (!signal) return
+        await processSignal(signal)
+      }
+    )
     .subscribe((status) => {
       channelStatuses.set(channel, status)
       console.log("VIVOS call v2 channel status:", status)
+
+      if (status === "SUBSCRIBED") {
+        startStoredSignalDrain()
+      }
     })
 
   activeChannel = channel
@@ -157,6 +285,11 @@ export function createVivosCallChannel(args: {
     channel,
     close: async () => {
       active = false
+
+      if (drainTimer) {
+        clearInterval(drainTimer)
+        drainTimer = null
+      }
 
       if (activeChannel === channel) {
         activeChannel = null
@@ -191,9 +324,18 @@ export async function sendVivosCallSignal(
   channel: RealtimeChannel | null,
   payload: VivosCallSignalPayload
 ) {
-  const resolvedChannel = await waitForVivosCallChannel(channel)
+  const stored = await persistVivosCallSignal(payload)
+  const resolvedChannel = await waitForVivosCallChannel(
+    channel,
+    stored ? SIGNAL_BROADCAST_FAST_WAIT_ATTEMPTS : SIGNAL_CHANNEL_WAIT_ATTEMPTS
+  )
 
   if (!resolvedChannel) {
+    if (stored) {
+      console.warn("sendVivosCallSignal stored without broadcast", payload.type)
+      return "stored"
+    }
+
     const reason = "call signaling channel is not subscribed"
     console.warn("sendVivosCallSignal skipped:", reason, payload.type)
     throw new Error(`${reason}: ${payload.type}`)
@@ -225,6 +367,11 @@ export async function sendVivosCallSignal(
         await sleep(SIGNAL_SEND_RETRY_MS)
       }
     }
+  }
+
+  if (stored) {
+    console.warn("sendVivosCallSignal broadcast failed but stored", payload.type, lastResult)
+    return "stored"
   }
 
   console.warn("sendVivosCallSignal failed after retry", payload.type, lastResult)
@@ -287,7 +434,7 @@ export async function sendVivosCallReject(args: {
 }) {
   return sendVivosCallSignal(
     args.channel,
-    buildVivosCallSignalPayload({
+    buildVivosCallPayload({
       type: "call_reject",
       callSessionId: args.callSessionId,
       conversationId: args.conversationId,
@@ -296,6 +443,10 @@ export async function sendVivosCallReject(args: {
       callType: args.callType,
     })
   )
+}
+
+function buildVivosCallPayload(args: CreateCallSignalPayloadArgs): VivosCallSignalPayload {
+  return buildVivosCallSignalPayload(args)
 }
 
 export async function sendVivosCallEnd(args: {
