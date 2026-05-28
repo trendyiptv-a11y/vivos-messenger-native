@@ -17,8 +17,8 @@ type CreateCallSignalPayloadArgs = {
   candidate?: VivosIceCandidate
 }
 
-const SIGNAL_CHANNEL_WAIT_ATTEMPTS = 8
-const SIGNAL_CHANNEL_WAIT_MS = 150
+const SIGNAL_CHANNEL_WAIT_ATTEMPTS = 40
+const SIGNAL_CHANNEL_WAIT_MS = 200
 const SIGNAL_SEND_RETRY_ATTEMPTS = 3
 const SIGNAL_SEND_RETRY_MS = 220
 
@@ -33,6 +33,11 @@ function isChannelSubscribed(channel: RealtimeChannel | null) {
   return Boolean(channel && channelStatuses.get(channel) === "SUBSCRIBED")
 }
 
+function getChannelStatus(channel: RealtimeChannel | null) {
+  if (!channel) return "MISSING"
+  return channelStatuses.get(channel) || "UNKNOWN"
+}
+
 async function waitForVivosCallChannel(initialChannel: RealtimeChannel | null) {
   let candidate = initialChannel || activeChannel
 
@@ -45,11 +50,8 @@ async function waitForVivosCallChannel(initialChannel: RealtimeChannel | null) {
     if (isChannelSubscribed(candidate)) return candidate
   }
 
-  if (candidate) {
-    console.warn("sendVivosCallSignal using channel before SUBSCRIBED", channelStatuses.get(candidate) || "UNKNOWN")
-  }
-
-  return candidate
+  console.warn("sendVivosCallSignal blocked until channel SUBSCRIBED, current status:", getChannelStatus(candidate))
+  return null
 }
 
 export function buildVivosCallSignalPayload(args: CreateCallSignalPayloadArgs): VivosCallSignalPayload {
@@ -72,6 +74,10 @@ export function getVivosCallChannelName(conversationId: string) {
 
 export function getActiveVivosCallChannel() {
   return activeChannel
+}
+
+export function getActiveVivosCallChannelStatus() {
+  return getChannelStatus(activeChannel)
 }
 
 export async function closeVivosCallChannel() {
@@ -188,8 +194,9 @@ export async function sendVivosCallSignal(
   const resolvedChannel = await waitForVivosCallChannel(channel)
 
   if (!resolvedChannel) {
-    console.warn("sendVivosCallSignal skipped: missing channel", payload.type)
-    return { ok: false, reason: "missing-channel" }
+    const reason = "call signaling channel is not subscribed"
+    console.warn("sendVivosCallSignal skipped:", reason, payload.type)
+    throw new Error(`${reason}: ${payload.type}`)
   }
 
   let lastResult: unknown = null
@@ -221,7 +228,7 @@ export async function sendVivosCallSignal(
   }
 
   console.warn("sendVivosCallSignal failed after retry", payload.type, lastResult)
-  return lastResult
+  throw new Error(`sendVivosCallSignal failed: ${payload.type}`)
 }
 
 export async function sendVivosCallInvite(args: {
