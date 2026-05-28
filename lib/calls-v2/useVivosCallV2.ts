@@ -52,12 +52,7 @@ import {
   toggleVivosSpeaker,
 } from "@/lib/calls-v2/audioRoute"
 import { notifyVivosCallV2, notifyVivosCallV2Cancelled } from "@/lib/calls-v2/callNotify"
-import {
-  consumePendingVivosCallFromNotification,
-  PendingVivosCallFromNotification,
-  VivosCallNotificationAction,
-} from "@/lib/calls-v2/callNotificationState"
-import { consumePendingCallNotificationRoute } from "@/lib/calls-v2/callNotificationRoute"
+import { consumePendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
 import {
   clearActiveVivosCallSession,
   setActiveVivosCallSession,
@@ -79,13 +74,6 @@ type UseVivosCallV2Args = {
   remoteName?: string
   selfName?: string
 }
-
-type PendingNotificationCall = {
-  call: PendingVivosCallFromNotification
-  action: VivosCallNotificationAction
-}
-
-const NOTIFICATION_CALL_ACTION_DELAY_MS = 1400
 
 function createCallSessionId() {
   return `vivos-call-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
@@ -568,7 +556,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
     try {
       await cancelVivosCallV2IncomingNotification()
       markActiveCallSession(current.callSessionId)
-      setCallState((state) => setCallStatus(state, "connecting", "Pregătesc apelul..."))
+      setCallState((state) => setCallStatus(state, "connecting", "Accept apel"))
 
       await prepareLocalPeer(current.callType)
 
@@ -620,72 +608,44 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
   useEffect(() => {
     if (!conversationId || !userId) return
 
-    let cancelled = false
-    let actionTimer: ReturnType<typeof setTimeout> | null = null
+    const pending = consumePendingVivosCallFromNotification(conversationId)
+    if (!pending) return
 
-    async function getPendingNotificationCall(): Promise<PendingNotificationCall | null> {
-      const memoryPending = consumePendingVivosCallFromNotification(conversationId)
-      if (memoryPending) return memoryPending
-
-      const route = await consumePendingCallNotificationRoute()
-      if (!route || route.conversationId !== conversationId) return null
-
-      return {
-        call: {
-          conversationId: route.conversationId,
-          callSessionId: route.callSessionId,
-          fromUserId: route.fromUserId,
-          callType: route.callType,
-        },
-        action: route.action,
-      }
+    if (currentCallRef.current.callSessionId) {
+      void cancelVivosCallV2IncomingNotification()
+      return
     }
 
-    void getPendingNotificationCall().then((pending) => {
-      if (cancelled || !pending) return
+    const { call, action } = pending
 
-      if (currentCallRef.current.callSessionId) {
-        void cancelVivosCallV2IncomingNotification()
-        return
-      }
+    currentCallRef.current = {
+      callSessionId: call.callSessionId,
+      callType: call.callType,
+      remoteUserId: call.fromUserId,
+      historyId: null,
+      historyFinalized: false,
+    }
+    markActiveCallSession(call.callSessionId)
 
-      const { call, action } = pending
-
-      currentCallRef.current = {
+    setCallState(
+      startIncomingCallState({
         callSessionId: call.callSessionId,
-        callType: call.callType,
+        conversationId: call.conversationId,
         remoteUserId: call.fromUserId,
-        historyId: null,
-        historyFinalized: false,
-      }
-      markActiveCallSession(call.callSessionId)
+        callType: call.callType,
+      })
+    )
 
-      setCallState(
-        startIncomingCallState({
-          callSessionId: call.callSessionId,
-          conversationId: call.conversationId,
-          remoteUserId: call.fromUserId,
-          callType: call.callType,
-        })
-      )
+    if (action === "accept") {
+      setTimeout(() => {
+        void acceptCall()
+      }, 250)
+    }
 
-      if (action === "accept") {
-        setCallState((state) => setCallStatus(state, "connecting", "Pregătesc apelul..."))
-        actionTimer = setTimeout(() => {
-          void acceptCall()
-        }, NOTIFICATION_CALL_ACTION_DELAY_MS)
-      }
-
-      if (action === "reject") {
-        actionTimer = setTimeout(() => {
-          void rejectCall()
-        }, NOTIFICATION_CALL_ACTION_DELAY_MS)
-      }
-    })
-
-    return () => {
-      cancelled = true
-      if (actionTimer) clearTimeout(actionTimer)
+    if (action === "reject") {
+      setTimeout(() => {
+        void rejectCall()
+      }, 250)
     }
   }, [acceptCall, conversationId, markActiveCallSession, rejectCall, userId])
 
