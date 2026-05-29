@@ -4,7 +4,7 @@
     "name": "VIVOS Messenger",
     "slug": "vivos-messenger-native",
     "scheme": "vivosmessenger",
-    "version": "0.1.7",
+    "version": "0.1.8",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/images/icon.png",
@@ -27,7 +27,7 @@
     },
     "android": {
       "package": "app.vivos.messenger",
-      "versionCode": 13,
+      "versionCode": 14,
       "googleServicesFile": "./google-services.json",
       "icon": "./assets/images/icon.png",
       "adaptiveIcon": {
@@ -42,6 +42,11 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.USE_FULL_SCREEN_INTENT",
         "android.permission.WAKE_LOCK",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+        "android.permission.FOREGROUND_SERVICE_CAMERA",
+        "android.permission.MANAGE_OWN_CALLS",
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_CONNECT"
       ]
