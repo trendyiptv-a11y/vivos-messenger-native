@@ -310,26 +310,6 @@ export function registerVivosCallV2NotifeeEvents(onOpenConversation?: (conversat
     onOpenConversation?.(call.conversationId)
   })
 
-  notifee.onBackgroundEvent(async ({ type, detail }) => {
-    if (type !== EventType.ACTION_PRESS && type !== EventType.PRESS) return
-
-    const data = detail.notification?.data as Record<string, unknown> | undefined
-    const call = normalizeCallData(data)
-    if (!call) return
-
-    await cancelVivosCallV2IncomingNotification()
-
-    if (shouldIgnoreNotificationCall(call)) return
-
-    const action = getNotificationAction(detail.pressAction?.id)
-    await storeNotificationCallAction(call, action)
-
-    if (action === "reject") {
-      await rejectNotificationCall(call)
-      await stopVivosCallV2ForegroundService()
-    }
-  })
-
   return unsubscribeForeground
 }
 
