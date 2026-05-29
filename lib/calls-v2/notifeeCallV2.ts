@@ -45,6 +45,7 @@ function normalizeCallData(data: Record<string, unknown> | undefined) {
   const conversationId = asString(data?.conversationId)
   const callSessionId = asString(data?.callSessionId)
   const fromUserId = asString(data?.fromUserId) || asString(data?.callerUserId)
+  const callType: VivosCallType = data?.callType === "video" ? "video" : "audio"
 
   if (!conversationId || !callSessionId || !fromUserId) return null
 
@@ -52,7 +53,7 @@ function normalizeCallData(data: Record<string, unknown> | undefined) {
     conversationId,
     callSessionId,
     fromUserId,
-    callType: data?.callType === "video" ? "video" : "audio" as VivosCallType,
+    callType,
   }
 }
 
