@@ -18,11 +18,20 @@ import { VivosCallType } from "@/lib/calls-v2/types"
 const CALL_NOTIFICATION_ID = "vivos-incoming-call-v2"
 const RING_VIBRATION_PATTERN = [900, 450, 900, 700]
 
+let foregroundServiceRegistered = false
+
 type IncomingCallV2NotificationArgs = {
   conversationId?: string | null
   callSessionId?: string | null
   fromUserId?: string | null
   callerName?: string | null
+  callType?: VivosCallType
+}
+
+type ActiveCallV2NotificationArgs = {
+  conversationId?: string | null
+  callSessionId?: string | null
+  remoteName?: string | null
   callType?: VivosCallType
 }
 
@@ -83,6 +92,28 @@ async function rejectNotificationCall(call: NonNullable<ReturnType<typeof normal
   }
 }
 
+export function registerVivosCallV2ForegroundService() {
+  if (Platform.OS !== "android") return
+  if (foregroundServiceRegistered) return
+
+  foregroundServiceRegistered = true
+
+  notifee.registerForegroundService(() => {
+    return new Promise(() => {
+      // The call foreground service intentionally stays alive until
+      // stopVivosCallV2ForegroundService() is called on reject/end/cleanup.
+    })
+  })
+}
+
+export async function stopVivosCallV2ForegroundService() {
+  if (Platform.OS !== "android") return
+
+  await notifee.stopForegroundService().catch((error) => {
+    console.warn("VIVOS call foreground service stop failed", error)
+  })
+}
+
 export async function setupVivosCallV2NotificationChannel() {
   if (Platform.OS !== "android") return null
 
@@ -118,6 +149,7 @@ export async function displayVivosCallV2IncomingNotification(args: IncomingCallV
     return
   }
 
+  registerVivosCallV2ForegroundService()
   await setupVivosCallV2NotificationChannel()
 
   try {
@@ -155,6 +187,7 @@ export async function displayVivosCallV2IncomingNotification(args: IncomingCallV
       colorized: true,
       ongoing: true,
       autoCancel: false,
+      asForegroundService: true,
       pressAction: {
         id: "default",
         launchActivity: "default",
@@ -185,6 +218,50 @@ export async function displayVivosCallV2IncomingNotification(args: IncomingCallV
       loopSound: true,
       sound: "default",
       vibrationPattern: RING_VIBRATION_PATTERN,
+    },
+  })
+}
+
+export async function displayVivosCallV2ActiveForegroundNotification(args: ActiveCallV2NotificationArgs) {
+  if (Platform.OS !== "android") return
+
+  const conversationId = args.conversationId ?? ""
+  const callSessionId = args.callSessionId ?? ""
+  const callType = args.callType ?? "audio"
+  const remoteName = args.remoteName?.trim() || "VIVOS"
+
+  registerVivosCallV2ForegroundService()
+  await setupVivosCallV2NotificationChannel()
+
+  await notifee.displayNotification({
+    id: CALL_NOTIFICATION_ID,
+    title: "VIVOS Messenger",
+    body: `Apel ${callType === "video" ? "video" : "audio"} activ cu ${remoteName}`,
+    data: {
+      kind: "active_call_v2",
+      type: "call_v2",
+      conversationId,
+      callSessionId,
+      callType,
+    },
+    android: {
+      channelId: NOTIFICATION_CHANNELS.calls,
+      category: AndroidCategory.CALL,
+      importance: AndroidImportance.HIGH,
+      visibility: AndroidVisibility.PUBLIC,
+      color: "#C96AA1",
+      colorized: true,
+      ongoing: true,
+      autoCancel: false,
+      asForegroundService: true,
+      pressAction: {
+        id: "default",
+        launchActivity: "default",
+      },
+      timestamp: Date.now(),
+      showTimestamp: true,
+      sound: undefined,
+      vibrationPattern: [],
     },
   })
 }
@@ -226,6 +303,7 @@ export function registerVivosCallV2NotifeeEvents(onOpenConversation?: (conversat
 
     if (action === "reject") {
       await rejectNotificationCall(call)
+      await stopVivosCallV2ForegroundService()
       return
     }
 
@@ -248,6 +326,7 @@ export function registerVivosCallV2NotifeeEvents(onOpenConversation?: (conversat
 
     if (action === "reject") {
       await rejectNotificationCall(call)
+      await stopVivosCallV2ForegroundService()
     }
   })
 
@@ -273,6 +352,7 @@ export function registerVivosCallV2NotifeeBackgroundHandler() {
 
     if (action === "reject") {
       await rejectNotificationCall(call)
+      await stopVivosCallV2ForegroundService()
     }
   })
 }
