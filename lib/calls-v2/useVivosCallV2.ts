@@ -57,7 +57,11 @@ import {
   clearActiveVivosCallSession,
   setActiveVivosCallSession,
 } from "@/lib/calls-v2/activeCallRuntime"
-import { cancelVivosCallV2IncomingNotification } from "@/lib/calls-v2/notifeeCallV2"
+import {
+  cancelVivosCallV2IncomingNotification,
+  displayVivosCallV2ActiveForegroundNotification,
+  stopVivosCallV2ForegroundService,
+} from "@/lib/calls-v2/notifeeCallV2"
 import {
   createCallHistorySession,
   markCallHistoryAccepted,
@@ -83,7 +87,7 @@ function normalizeCallerName(value?: string | null) {
   return value?.trim() || "Un membru VIVOS"
 }
 
-export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName }: UseVivosCallV2Args) {
+export function useVivosCallV2({ conversationId, userId, remoteUserId, remoteName, selfName }: UseVivosCallV2Args) {
   const [callState, setCallState] = useState<VivosCallRuntimeState>(() => createIdleCallState())
 
   const channelRef = useRef<RealtimeChannel | null>(null)
@@ -238,6 +242,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
     await stopVivosAudioRoute()
     await closeVivosPeerConnection()
     await stopLocalMedia()
+    await stopVivosCallV2ForegroundService()
     clearActiveVivosCallSession(previousCallSessionId)
     currentCallRef.current = {
       callSessionId: null,
@@ -277,6 +282,18 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
       })
     },
     [conversationId, selfName, userId]
+  )
+
+  const showActiveCallForeground = useCallback(
+    async (callType: VivosCallType, callSessionId?: string | null) => {
+      await displayVivosCallV2ActiveForegroundNotification({
+        conversationId,
+        callSessionId: callSessionId ?? currentCallRef.current.callSessionId,
+        remoteName: normalizeCallerName(remoteName),
+        callType,
+      })
+    },
+    [conversationId, remoteName]
   )
 
   const handleSignal = useCallback(
@@ -319,7 +336,8 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
           if (signal.callSessionId !== current.callSessionId) return
 
           finalizeHistory("accepted")
-          void cancelVivosCallV2IncomingNotification()
+          await cancelVivosCallV2IncomingNotification()
+          await showActiveCallForeground(signal.callType, signal.callSessionId)
           setCallState((state) => setCallStatus(state, "connecting", "Accept primit, creez offer"))
 
           const offer = await createVivosOffer()
@@ -365,7 +383,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
           const current = currentCallRef.current
           if (signal.callSessionId !== current.callSessionId || !signal.sdp) return
 
-          void cancelVivosCallV2IncomingNotification()
+          await showActiveCallForeground(signal.callType, signal.callSessionId)
           setCallState((state) => setCallStatus(state, "connecting", "Offer primit"))
 
           await applyVivosRemoteDescription(signal.sdp as any)
@@ -392,7 +410,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
           const current = currentCallRef.current
           if (signal.callSessionId !== current.callSessionId || !signal.sdp) return
 
-          void cancelVivosCallV2IncomingNotification()
+          await showActiveCallForeground(signal.callType, signal.callSessionId)
           await applyVivosRemoteDescription(signal.sdp as any)
           await applyPendingIce()
 
@@ -420,7 +438,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
         setCallState((state) => failCallState(state, message))
       }
     },
-    [applyPendingIce, cleanupMediaAndPeer, conversationId, finalizeHistory, markActiveCallSession, refreshSnapshots, userId]
+    [applyPendingIce, cleanupMediaAndPeer, conversationId, finalizeHistory, markActiveCallSession, refreshSnapshots, showActiveCallForeground, userId]
   )
 
   useEffect(() => {
@@ -555,6 +573,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
 
     try {
       await cancelVivosCallV2IncomingNotification()
+      await showActiveCallForeground(current.callType, current.callSessionId)
       markActiveCallSession(current.callSessionId)
       setCallState((state) => setCallStatus(state, "connecting", "Accept apel"))
 
@@ -578,7 +597,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
       setCallState((state) => failCallState(state, message))
       return false
     }
-  }, [cleanupMediaAndPeer, conversationId, markActiveCallSession, prepareLocalPeer, userId])
+  }, [cleanupMediaAndPeer, conversationId, markActiveCallSession, prepareLocalPeer, showActiveCallForeground, userId])
 
   const rejectCall = useCallback(async () => {
     if (!userId || !conversationId) return
