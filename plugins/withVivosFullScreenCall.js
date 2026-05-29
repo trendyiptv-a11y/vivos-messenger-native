@@ -12,31 +12,6 @@ function getMainApplication(manifest) {
   return applications[0] || null
 }
 
-function ensureNotifeeForegroundService(application) {
-  if (!application) return
-
-  application.service = application.service || []
-
-  const serviceName = "app.notifee.core.ForegroundService"
-  const existing = application.service.find((service) => service?.$?.["android:name"] === serviceName)
-
-  const serviceConfig = {
-    "android:name": serviceName,
-    "android:exported": "false",
-    "android:foregroundServiceType": "phoneCall|microphone|camera",
-  }
-
-  if (existing?.$) {
-    existing.$ = {
-      ...existing.$,
-      ...serviceConfig,
-    }
-    return
-  }
-
-  application.service.push({ $: serviceConfig })
-}
-
 function isMainActivity(activity) {
   const intentFilters = activity?.["intent-filter"] || []
   return intentFilters.some((filter) => {
@@ -58,16 +33,9 @@ function withVivosFullScreenCall(config) {
     const manifest = config.modResults
     ensurePermission(manifest, "android.permission.USE_FULL_SCREEN_INTENT")
     ensurePermission(manifest, "android.permission.WAKE_LOCK")
-    ensurePermission(manifest, "android.permission.FOREGROUND_SERVICE")
-    ensurePermission(manifest, "android.permission.FOREGROUND_SERVICE_PHONE_CALL")
-    ensurePermission(manifest, "android.permission.FOREGROUND_SERVICE_MICROPHONE")
-    ensurePermission(manifest, "android.permission.FOREGROUND_SERVICE_CAMERA")
-    ensurePermission(manifest, "android.permission.MANAGE_OWN_CALLS")
 
     const mainApplication = getMainApplication(manifest)
     const mainActivity = mainApplication ? getMainActivity(mainApplication) : null
-
-    ensureNotifeeForegroundService(mainApplication)
 
     if (mainActivity?.$) {
       mainActivity.$["android:showWhenLocked"] = "true"
