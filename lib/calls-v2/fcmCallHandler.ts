@@ -27,6 +27,16 @@ type VivosCallFcmData = {
   action?: string
 }
 
+export type VivosForegroundFcmCall = {
+  conversationId: string
+  callSessionId: string
+  fromUserId: string
+  callerName: string
+  callType: VivosCallType
+}
+
+type ForegroundCallHandler = (call: VivosForegroundFcmCall) => void | Promise<void>
+
 function asString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null
 }
@@ -49,7 +59,7 @@ function isAppInForeground() {
   return AppState.currentState === "active"
 }
 
-function normalizeCallData(data: VivosCallFcmData | undefined | null, allowCancelled = false) {
+function normalizeCallData(data: VivosCallFcmData | undefined | null, allowCancelled = false): VivosForegroundFcmCall | null {
   if (!isIncomingCallV2(data) && !(allowCancelled && isCancelledCallV2(data))) return null
 
   const conversationId = asString(data?.conversationId)
@@ -71,7 +81,10 @@ function normalizeAction(value: unknown): VivosCallNotificationAction {
   return value === "accept" || value === "reject" ? value : "open"
 }
 
-async function handleIncomingCallFcmMessage(message: FirebaseMessagingTypes.RemoteMessage) {
+async function handleIncomingCallFcmMessage(
+  message: FirebaseMessagingTypes.RemoteMessage,
+  onForegroundIncomingCall?: ForegroundCallHandler
+) {
   const data = (message.data ?? {}) as VivosCallFcmData
 
   if (isCancelledCallV2(data)) {
@@ -116,6 +129,11 @@ async function handleIncomingCallFcmMessage(message: FirebaseMessagingTypes.Remo
     normalizeAction(data.action)
   )
 
+  if (isAppInForeground() && onForegroundIncomingCall) {
+    await onForegroundIncomingCall(call)
+    return
+  }
+
   await displayVivosCallV2IncomingNotification({
     conversationId: call.conversationId,
     callSessionId: call.callSessionId,
@@ -133,11 +151,11 @@ export function registerVivosCallV2FcmBackgroundHandler() {
   })
 }
 
-export function registerVivosCallV2FcmForegroundHandler() {
+export function registerVivosCallV2FcmForegroundHandler(onIncomingCall?: ForegroundCallHandler) {
   if (Platform.OS !== "android") return () => {}
 
   const unsubscribeMessage = messaging().onMessage(async (message) => {
-    await handleIncomingCallFcmMessage(message)
+    await handleIncomingCallFcmMessage(message, onIncomingCall)
   })
 
   const unsubscribeTokenRefresh = messaging().onTokenRefresh(() => {
