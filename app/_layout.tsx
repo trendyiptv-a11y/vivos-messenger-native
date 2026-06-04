@@ -19,6 +19,40 @@ import { startPresenceHeartbeat, stopPresenceHeartbeat } from "@/lib/presence/us
 import { supabase } from "@/lib/supabase"
 import { theme } from "@/lib/theme"
 
+function asNotificationString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+function getNotificationCallKind(data: Record<string, unknown>) {
+  return asNotificationString(data.kind) || asNotificationString(data.type)
+}
+
+function routeForegroundCallNotification(router: ReturnType<typeof useRouter>, notification: Notifications.Notification) {
+  const data = (notification.request.content.data ?? {}) as Record<string, unknown>
+  const kind = getNotificationCallKind(data)
+
+  if (kind !== "incoming_call_v2" && kind !== "call_v2") return false
+
+  const conversationId = asNotificationString(data.conversationId)
+  const callSessionId = asNotificationString(data.callSessionId)
+  const fromUserId = asNotificationString(data.fromUserId) || asNotificationString(data.callerUserId)
+
+  if (!conversationId || !callSessionId || !fromUserId) return false
+
+  setPendingVivosCallFromNotification(
+    {
+      conversationId,
+      callSessionId,
+      fromUserId,
+      callType: data.callType === "video" ? "video" : "audio",
+    },
+    "open"
+  )
+
+  router.push({ pathname: "/chat/[id]", params: { id: conversationId } })
+  return true
+}
+
 export default function RootLayout() {
   const { isAuthenticated, loading } = useAuthSession()
   const segments = useSegments()
@@ -123,6 +157,7 @@ export default function RootLayout() {
 
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
       routeForegroundNotification(notification)
+      routeForegroundCallNotification(router, notification)
     })
 
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
