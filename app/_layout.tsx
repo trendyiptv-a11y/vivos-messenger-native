@@ -146,7 +146,19 @@ export default function RootLayout() {
       router.push({ pathname: "/chat/[id]", params: { id: conversationId } })
     })
 
-    const fcmUnsubscribe = registerVivosCallV2FcmForegroundHandler()
+    const fcmUnsubscribe = registerVivosCallV2FcmForegroundHandler((call) => {
+      setPendingVivosCallFromNotification(
+        {
+          conversationId: call.conversationId,
+          callSessionId: call.callSessionId,
+          fromUserId: call.fromUserId,
+          callType: call.callType,
+        },
+        "open"
+      )
+
+      router.push({ pathname: "/chat/[id]", params: { id: call.conversationId } })
+    })
 
     const appStateSubscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
