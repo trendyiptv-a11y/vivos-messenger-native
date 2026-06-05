@@ -55,7 +55,7 @@ export async function startVivosGlobalCallInviteListener({
 
   for (const conversationId of conversationIds) {
     const channel = supabase
-      .channel(`global-${getVivosCallChannelName(conversationId)}`)
+      .channel(getVivosCallChannelName(conversationId))
       .on("broadcast", { event: "call_invite" }, async ({ payload }) => {
         if (!active) return
 
