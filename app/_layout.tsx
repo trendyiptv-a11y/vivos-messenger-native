@@ -15,7 +15,6 @@ import { stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
 import { registerVivosCallV2FcmForegroundHandler } from "@/lib/calls-v2/fcmCallHandler"
 import { consumePendingCallNotificationRoute } from "@/lib/calls-v2/callNotificationRoute"
 import { setPendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
-import { startVivosGlobalCallInviteListener } from "@/lib/calls-v2/globalCallInviteListener"
 import { startPresenceHeartbeat, stopPresenceHeartbeat } from "@/lib/presence/userPresence"
 import { supabase } from "@/lib/supabase"
 import { theme } from "@/lib/theme"
@@ -127,42 +126,6 @@ export default function RootLayout() {
       stopPresenceHeartbeat()
     }
   }, [isAuthenticated, loading])
-
-  useEffect(() => {
-    if (!isAuthenticated || loading) return
-
-    let cancelled = false
-    let cleanupGlobalCallListener: null | (() => Promise<void>) = null
-
-    supabase.auth.getSession().then(async ({ data }) => {
-      const userId = data.session?.user?.id ?? null
-      if (cancelled || !userId) return
-
-      cleanupGlobalCallListener = await startVivosGlobalCallInviteListener({
-        userId,
-        onIncomingInvite: (invite) => {
-          setPendingVivosCallFromNotification(
-            {
-              conversationId: invite.conversationId,
-              callSessionId: invite.callSessionId,
-              fromUserId: invite.fromUserId,
-              callType: invite.callType,
-            },
-            "open"
-          )
-
-          router.push({ pathname: "/chat/[id]", params: { id: invite.conversationId } })
-        },
-      })
-    })
-
-    return () => {
-      cancelled = true
-      if (cleanupGlobalCallListener) {
-        void cleanupGlobalCallListener()
-      }
-    }
-  }, [isAuthenticated, loading, router])
 
   useEffect(() => {
     if (!isAuthenticated || loading) return
