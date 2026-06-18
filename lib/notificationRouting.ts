@@ -9,6 +9,7 @@ import {
   startVivosCallV2Ringtone,
   stopVivosCallV2Ringtone,
 } from "@/lib/calls-v2/callRingtone"
+import { setGlobalIncomingVivosCall } from "@/lib/calls-v2/globalIncomingCallState"
 
 type NotificationData = {
   kind?: unknown
@@ -81,16 +82,33 @@ export function routeForegroundNotification(notification: Notifications.Notifica
 
   if (kind !== "incoming_call_v2" && kind !== "call_v2") return
 
+  const conversationId = asString(data.conversationId)
+  const callSessionId = asString(data.callSessionId)
+  const fromUserId = asString(data.fromUserId) || asString(data.callerUserId)
+  const callerName =
+    asString(data.callerName) ||
+    asString(data.title) ||
+    notification.request.content.title ||
+    notification.request.content.body ||
+    "VIVOS"
+  const callType = data.callType === "video" ? "video" : "audio"
+
   void startVivosCallV2Ringtone({
-    callSessionId: asString(data.callSessionId),
-    callerName:
-      asString(data.callerName) ||
-      asString(data.title) ||
-      notification.request.content.title ||
-      notification.request.content.body ||
-      "VIVOS",
-    callType: data.callType === "video" ? "video" : "audio",
-    conversationId: asString(data.conversationId),
-    fromUserId: asString(data.fromUserId) || asString(data.callerUserId),
+    callSessionId,
+    callerName,
+    callType,
+    conversationId,
+    fromUserId,
+  })
+
+  if (!conversationId || !callSessionId || !fromUserId) return
+
+  setGlobalIncomingVivosCall({
+    conversationId,
+    callSessionId,
+    fromUserId,
+    callerName,
+    callType,
+    action: "open",
   })
 }
