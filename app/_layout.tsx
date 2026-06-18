@@ -12,7 +12,7 @@ import {
   registerVivosCallV2NotifeeEvents,
   setupVivosCallV2NotificationChannel,
 } from "@/lib/calls-v2/notifeeCallV2"
-import { stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
+import { startVivosCallV2Ringtone, stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
 import { registerVivosCallV2FcmForegroundHandler } from "@/lib/calls-v2/fcmCallHandler"
 import { consumePendingCallNotificationRoute } from "@/lib/calls-v2/callNotificationRoute"
 import { setPendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
@@ -115,6 +115,14 @@ export default function RootLayout() {
     })
 
     const fcmUnsubscribe = registerVivosCallV2FcmForegroundHandler((call) => {
+      void startVivosCallV2Ringtone({
+        callSessionId: call.callSessionId,
+        callerName: call.callerName,
+        callType: call.callType,
+        conversationId: call.conversationId,
+        fromUserId: call.fromUserId,
+      })
+
       setGlobalIncomingVivosCall({
         conversationId: call.conversationId,
         callSessionId: call.callSessionId,
