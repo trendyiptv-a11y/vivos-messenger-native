@@ -9,6 +9,7 @@ import {
   startVivosCallV2Ringtone,
   stopVivosCallV2Ringtone,
 } from "@/lib/calls-v2/callRingtone"
+import { isActiveVivosCallConversation } from "@/lib/calls-v2/activeCallRuntime"
 import { setGlobalIncomingVivosCall } from "@/lib/calls-v2/globalIncomingCallState"
 
 type NotificationData = {
@@ -102,6 +103,7 @@ export function routeForegroundNotification(notification: Notifications.Notifica
   })
 
   if (!conversationId || !callSessionId || !fromUserId) return
+  if (isActiveVivosCallConversation(conversationId)) return
 
   setGlobalIncomingVivosCall({
     conversationId,
