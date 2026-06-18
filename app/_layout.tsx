@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar"
 import { useCallback, useEffect, useRef } from "react"
 import * as Notifications from "expo-notifications"
 import { AppErrorBoundary } from "@/components/system/AppErrorBoundary"
+import { GlobalIncomingCallBanner } from "@/components/calls-v2/GlobalIncomingCallBanner"
 import { useAuthSession } from "@/hooks/useAuthSession"
 import { clearNativeBadge, requestNotificationPermissions } from "@/lib/notifications"
 import { routeForegroundNotification, routeNotificationResponse } from "@/lib/notificationRouting"
@@ -15,43 +16,10 @@ import { stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
 import { registerVivosCallV2FcmForegroundHandler } from "@/lib/calls-v2/fcmCallHandler"
 import { consumePendingCallNotificationRoute } from "@/lib/calls-v2/callNotificationRoute"
 import { setPendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
+import { setGlobalIncomingVivosCall } from "@/lib/calls-v2/globalIncomingCallState"
 import { startPresenceHeartbeat, stopPresenceHeartbeat } from "@/lib/presence/userPresence"
 import { supabase } from "@/lib/supabase"
 import { theme } from "@/lib/theme"
-
-function asNotificationString(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : null
-}
-
-function getNotificationCallKind(data: Record<string, unknown>) {
-  return asNotificationString(data.kind) || asNotificationString(data.type)
-}
-
-function routeForegroundCallNotification(router: ReturnType<typeof useRouter>, notification: Notifications.Notification) {
-  const data = (notification.request.content.data ?? {}) as Record<string, unknown>
-  const kind = getNotificationCallKind(data)
-
-  if (kind !== "incoming_call_v2" && kind !== "call_v2") return false
-
-  const conversationId = asNotificationString(data.conversationId)
-  const callSessionId = asNotificationString(data.callSessionId)
-  const fromUserId = asNotificationString(data.fromUserId) || asNotificationString(data.callerUserId)
-
-  if (!conversationId || !callSessionId || !fromUserId) return false
-
-  setPendingVivosCallFromNotification(
-    {
-      conversationId,
-      callSessionId,
-      fromUserId,
-      callType: data.callType === "video" ? "video" : "audio",
-    },
-    "open"
-  )
-
-  router.push({ pathname: "/chat/[id]", params: { id: conversationId } })
-  return true
-}
 
 export default function RootLayout() {
   const { isAuthenticated, loading } = useAuthSession()
@@ -147,17 +115,14 @@ export default function RootLayout() {
     })
 
     const fcmUnsubscribe = registerVivosCallV2FcmForegroundHandler((call) => {
-      setPendingVivosCallFromNotification(
-        {
-          conversationId: call.conversationId,
-          callSessionId: call.callSessionId,
-          fromUserId: call.fromUserId,
-          callType: call.callType,
-        },
-        "open"
-      )
-
-      router.push({ pathname: "/chat/[id]", params: { id: call.conversationId } })
+      setGlobalIncomingVivosCall({
+        conversationId: call.conversationId,
+        callSessionId: call.callSessionId,
+        fromUserId: call.fromUserId,
+        callerName: call.callerName,
+        callType: call.callType,
+        action: "open",
+      })
     })
 
     const appStateSubscription = AppState.addEventListener("change", (state) => {
@@ -169,7 +134,6 @@ export default function RootLayout() {
 
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
       routeForegroundNotification(notification)
-      routeForegroundCallNotification(router, notification)
     })
 
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -202,16 +166,19 @@ export default function RootLayout() {
   return (
     <AppErrorBoundary>
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.bgBottom } }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="signup" />
-        <Stack.Screen name="inbox" />
-        <Stack.Screen name="members" />
-        <Stack.Screen name="calls" />
-        <Stack.Screen name="profile" />
-        <Stack.Screen name="chat/[id]" />
-      </Stack>
+      <View style={{ flex: 1 }}>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.bgBottom } }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="login" />
+          <Stack.Screen name="signup" />
+          <Stack.Screen name="inbox" />
+          <Stack.Screen name="members" />
+          <Stack.Screen name="calls" />
+          <Stack.Screen name="profile" />
+          <Stack.Screen name="chat/[id]" />
+        </Stack>
+        {isAuthenticated ? <GlobalIncomingCallBanner /> : null}
+      </View>
     </AppErrorBoundary>
   )
 }
