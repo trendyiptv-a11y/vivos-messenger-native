@@ -1,13 +1,19 @@
 import { RealtimeChannel } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
 import { isActiveVivosCallConversation, shouldBlockIncomingVivosCall } from "@/lib/calls-v2/activeCallRuntime"
-import { startVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
-import { setGlobalIncomingVivosCall } from "@/lib/calls-v2/globalIncomingCallState"
-import { getVivosCallChannelName } from "@/lib/calls-v2/signaling"
-import { VivosCallSignalPayload, VivosCallType } from "@/lib/calls-v2/types"
+import { startVivosCallV2Ringtone, stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
+import { clearGlobalIncomingVivosCall, getGlobalIncomingVivosCall, setGlobalIncomingVivosCall } from "@/lib/calls-v2/globalIncomingCallState"
+import { VivosCallType } from "@/lib/calls-v2/types"
 
-type ConversationRow = {
+type CallSessionRow = {
   id: string
+  call_session_id: string | null
+  conversation_id: string
+  caller_id: string
+  callee_id: string
+  status: string | null
+  call_type: string | null
+  created_at?: string | null
 }
 
 type MemberProfileRow = {
@@ -17,22 +23,22 @@ type MemberProfileRow = {
   email: string | null
 }
 
-type GlobalCallInviteRuntime = {
+type Runtime = {
   userId: string | null
-  channels: RealtimeChannel[]
-  refreshTimer: ReturnType<typeof setInterval> | null
+  channel: RealtimeChannel | null
+  timer: ReturnType<typeof setInterval> | null
   generation: number
-  conversationIds: Set<string>
-  callerNameCache: Map<string, string>
+  names: Map<string, string>
+  seen: Set<string>
 }
 
-const runtime: GlobalCallInviteRuntime = {
+const runtime: Runtime = {
   userId: null,
-  channels: [],
-  refreshTimer: null,
+  channel: null,
+  timer: null,
   generation: 0,
-  conversationIds: new Set(),
-  callerNameCache: new Map(),
+  names: new Map(),
+  seen: new Set(),
 }
 
 function clean(value: unknown) {
@@ -43,54 +49,59 @@ function normalizeCallType(value: unknown): VivosCallType {
   return value === "video" ? "video" : "audio"
 }
 
-function getCallerCacheKey(conversationId: string, fromUserId: string) {
-  return `${conversationId}:${fromUserId}`
+function rowCallSessionId(row: CallSessionRow) {
+  return clean(row.call_session_id) || clean(row.id)
 }
 
-async function resolveCallerName(conversationId: string, fromUserId: string) {
-  const cacheKey = getCallerCacheKey(conversationId, fromUserId)
-  const cached = runtime.callerNameCache.get(cacheKey)
+function isFresh(row: CallSessionRow) {
+  if (row.status !== "ringing") return false
+  if (!row.created_at) return true
+  const createdAt = new Date(row.created_at).getTime()
+  return !Number.isFinite(createdAt) || Date.now() - createdAt < 90_000
+}
+
+async function callerName(conversationId: string, callerId: string) {
+  const key = `${conversationId}:${callerId}`
+  const cached = runtime.names.get(key)
   if (cached) return cached
 
   try {
     const { data } = await supabase.rpc("get_conversation_members_with_profiles", {
       p_conversation_id: conversationId,
     })
-
-    const caller = ((data ?? []) as MemberProfileRow[]).find((member) => member.member_id === fromUserId)
-    const callerName = caller?.name?.trim() || caller?.alias?.trim() || caller?.email?.trim() || "Un membru VIVOS"
-
-    runtime.callerNameCache.set(cacheKey, callerName)
-    return callerName
-  } catch (error) {
-    console.warn("Global call caller name lookup failed", error)
+    const caller = ((data ?? []) as MemberProfileRow[]).find((member) => member.member_id === callerId)
+    const name = caller?.name?.trim() || caller?.alias?.trim() || caller?.email?.trim() || "Un membru VIVOS"
+    runtime.names.set(key, name)
+    return name
+  } catch {
     return "Un membru VIVOS"
   }
 }
 
-async function handleGlobalCallInvite(payload: unknown, userId: string, generation: number) {
+async function showIncoming(row: CallSessionRow, userId: string, generation: number) {
   if (generation !== runtime.generation || runtime.userId !== userId) return
+  if (!isFresh(row)) return
 
-  const signal = payload as Partial<VivosCallSignalPayload>
-  const conversationId = clean(signal.conversationId)
-  const callSessionId = clean(signal.callSessionId)
-  const fromUserId = clean(signal.fromUserId)
-  const toUserId = clean(signal.toUserId)
-  const callType = normalizeCallType(signal.callType)
+  const callSessionId = rowCallSessionId(row)
+  const conversationId = clean(row.conversation_id)
+  const fromUserId = clean(row.caller_id)
+  const toUserId = clean(row.callee_id)
+  const callType = normalizeCallType(row.call_type)
 
-  if (!conversationId || !callSessionId || !fromUserId) return
-  if (fromUserId === userId) return
-  if (toUserId && toUserId !== userId) return
+  if (!callSessionId || !conversationId || !fromUserId || !toUserId) return
+  if (toUserId !== userId || fromUserId === userId) return
+  if (runtime.seen.has(callSessionId)) return
   if (isActiveVivosCallConversation(conversationId)) return
   if (shouldBlockIncomingVivosCall({ conversationId, callSessionId })) return
 
-  const callerName = await resolveCallerName(conversationId, fromUserId)
+  runtime.seen.add(callSessionId)
+  const name = await callerName(conversationId, fromUserId)
 
   if (generation !== runtime.generation || runtime.userId !== userId) return
 
   void startVivosCallV2Ringtone({
     callSessionId,
-    callerName,
+    callerName: name,
     callType,
     conversationId,
     fromUserId,
@@ -100,96 +111,109 @@ async function handleGlobalCallInvite(payload: unknown, userId: string, generati
     conversationId,
     callSessionId,
     fromUserId,
-    callerName,
+    callerName: name,
     callType,
     action: "open",
   })
 }
 
-function subscribeConversation(conversationId: string, userId: string, generation: number) {
-  const channelName = getVivosCallChannelName(conversationId)
-  const channel = supabase
-    .channel(channelName)
-    .on("broadcast", { event: "call_invite" }, ({ payload }) => {
-      void handleGlobalCallInvite(payload, userId, generation)
-    })
-    .subscribe((status) => {
-      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        console.warn("Global call invite channel status", channelName, status)
-      }
-    })
+async function handleRow(row: CallSessionRow, userId: string, generation: number) {
+  const callSessionId = rowCallSessionId(row)
+  if (!callSessionId) return
 
-  runtime.channels.push(channel)
+  if (row.status === "ringing") {
+    await showIncoming(row, userId, generation)
+    return
+  }
+
+  if (getGlobalIncomingVivosCall()?.callSessionId === callSessionId) {
+    clearGlobalIncomingVivosCall(callSessionId)
+    void stopVivosCallV2Ringtone(callSessionId)
+  }
 }
 
-async function refreshGlobalCallInviteSubscriptions(userId: string, generation: number) {
+async function refresh(userId: string, generation: number) {
   if (generation !== runtime.generation || runtime.userId !== userId) return
 
   try {
     const { data, error } = await supabase
-      .from("conversations")
-      .select("id")
+      .from("call_sessions")
+      .select("id, call_session_id, conversation_id, caller_id, callee_id, status, call_type, created_at")
+      .eq("callee_id", userId)
+      .eq("status", "ringing")
       .order("created_at", { ascending: false })
-      .limit(100)
+      .limit(5)
 
     if (error) throw error
-    if (generation !== runtime.generation || runtime.userId !== userId) return
 
-    const nextIds = ((data ?? []) as ConversationRow[])
-      .map((conversation) => clean(conversation.id))
-      .filter((value): value is string => Boolean(value))
-
-    nextIds.forEach((conversationId) => {
-      if (runtime.conversationIds.has(conversationId)) return
-      runtime.conversationIds.add(conversationId)
-      subscribeConversation(conversationId, userId, generation)
-    })
+    for (const row of (data ?? []) as CallSessionRow[]) {
+      await showIncoming(row, userId, generation)
+    }
   } catch (error) {
-    console.warn("Global call invite subscription refresh failed", error)
+    console.warn("VIVOS persistent incoming call refresh failed", error)
   }
 }
 
-export function startGlobalVivosCallInviteListener(userId?: string | null) {
-  const cleanUserId = clean(userId)
-  if (!cleanUserId) return
+function subscribe(userId: string, generation: number) {
+  const channel = supabase
+    .channel(`vivos-call-sessions:${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "call_sessions", filter: `callee_id=eq.${userId}` },
+      (payload) => {
+        const row = (payload.new ?? payload.old) as CallSessionRow | null
+        if (row) void handleRow(row, userId, generation)
+      }
+    )
+    .subscribe((status) => {
+      console.log("VIVOS persistent incoming call channel", status)
+    })
 
-  if (runtime.userId === cleanUserId && runtime.channels.length > 0) {
+  runtime.channel = channel
+}
+
+export function startGlobalVivosCallInviteListener(userId?: string | null) {
+  const id = clean(userId)
+  if (!id) return
+
+  if (runtime.userId === id && runtime.channel) {
+    void refresh(id, runtime.generation)
     return
   }
 
   stopGlobalVivosCallInviteListener()
 
-  runtime.userId = cleanUserId
+  runtime.userId = id
   runtime.generation += 1
-  runtime.conversationIds = new Set()
-  runtime.callerNameCache = new Map()
+  runtime.names = new Map()
+  runtime.seen = new Set()
 
   const generation = runtime.generation
+  subscribe(id, generation)
+  void refresh(id, generation)
 
-  void refreshGlobalCallInviteSubscriptions(cleanUserId, generation)
-
-  runtime.refreshTimer = setInterval(() => {
-    void refreshGlobalCallInviteSubscriptions(cleanUserId, generation)
-  }, 60 * 1000)
+  runtime.timer = setInterval(() => {
+    void refresh(id, generation)
+  }, 15_000)
 }
 
 export function stopGlobalVivosCallInviteListener() {
   runtime.generation += 1
   runtime.userId = null
-  runtime.conversationIds = new Set()
-  runtime.callerNameCache = new Map()
+  runtime.names = new Map()
+  runtime.seen = new Set()
 
-  if (runtime.refreshTimer) {
-    clearInterval(runtime.refreshTimer)
-    runtime.refreshTimer = null
+  if (runtime.timer) {
+    clearInterval(runtime.timer)
+    runtime.timer = null
   }
 
-  const channels = runtime.channels
-  runtime.channels = []
+  const channel = runtime.channel
+  runtime.channel = null
 
-  channels.forEach((channel) => {
+  if (channel) {
     supabase.removeChannel(channel).catch((error) => {
-      console.warn("Global call invite channel cleanup failed", error)
+      console.warn("VIVOS persistent incoming call cleanup failed", error)
     })
-  })
+  }
 }
