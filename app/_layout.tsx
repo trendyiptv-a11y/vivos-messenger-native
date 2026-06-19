@@ -16,6 +16,7 @@ import { startVivosCallV2Ringtone, stopVivosCallV2Ringtone } from "@/lib/calls-v
 import { registerVivosCallV2FcmForegroundHandler } from "@/lib/calls-v2/fcmCallHandler"
 import { consumePendingCallNotificationRoute } from "@/lib/calls-v2/callNotificationRoute"
 import { setPendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
+import { startGlobalVivosCallInviteListener, stopGlobalVivosCallInviteListener } from "@/lib/calls-v2/globalCallInviteListener"
 import { setGlobalIncomingVivosCall } from "@/lib/calls-v2/globalIncomingCallState"
 import { startPresenceHeartbeat, stopPresenceHeartbeat } from "@/lib/presence/userPresence"
 import { supabase } from "@/lib/supabase"
@@ -79,6 +80,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (!isAuthenticated || loading) {
       stopPresenceHeartbeat()
+      stopGlobalVivosCallInviteListener()
       return
     }
 
@@ -86,12 +88,15 @@ export default function RootLayout() {
 
     supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return
-      startPresenceHeartbeat(data.session?.user?.id ?? null)
+      const userId = data.session?.user?.id ?? null
+      startPresenceHeartbeat(userId)
+      startGlobalVivosCallInviteListener(userId)
     })
 
     return () => {
       cancelled = true
       stopPresenceHeartbeat()
+      stopGlobalVivosCallInviteListener()
     }
   }, [isAuthenticated, loading])
 
