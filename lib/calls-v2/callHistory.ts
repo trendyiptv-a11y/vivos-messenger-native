@@ -4,7 +4,7 @@ import { VivosCallType } from "@/lib/calls-v2/types"
 export type VivosCallHistoryStatus = "ringing" | "accepted" | "ended" | "rejected" | "missed" | "cancelled" | "failed"
 
 type CreateCallHistoryArgs = {
-  callSessionId: string
+  callSessionId?: string | null
   conversationId: string
   callerId: string
   calleeId: string
@@ -44,21 +44,26 @@ function buildStatusPatch(args: { status: VivosCallHistoryStatus; answered?: boo
 }
 
 export async function createCallHistorySession(args: CreateCallHistoryArgs) {
-  if (!args.callSessionId || !args.conversationId || !args.callerId || !args.calleeId) {
+  if (!args.conversationId || !args.callerId || !args.calleeId) {
     return { ok: false, historyId: null, reason: "missing-fields" }
   }
 
   try {
+    const insertPayload: Record<string, string> = {
+      conversation_id: args.conversationId,
+      caller_id: args.callerId,
+      callee_id: args.calleeId,
+      status: "ringing",
+      call_type: args.callType,
+    }
+
+    if (args.callSessionId) {
+      insertPayload.call_session_id = args.callSessionId
+    }
+
     const { data, error } = await supabase
       .from("call_sessions")
-      .insert({
-        call_session_id: args.callSessionId,
-        conversation_id: args.conversationId,
-        caller_id: args.callerId,
-        callee_id: args.calleeId,
-        status: "ringing",
-        call_type: args.callType,
-      })
+      .insert(insertPayload)
       .select("id")
       .single()
 
