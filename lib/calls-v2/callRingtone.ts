@@ -87,7 +87,9 @@ export async function startVivosCallV2Ringtone(args: StartRingtoneArgs = {}) {
   }, RING_INTERVAL_MS)
 }
 
-export async function stopVivosCallV2Ringtone() {
+export async function stopVivosCallV2Ringtone(callSessionId?: string | null) {
+  if (callSessionId && activeCallSessionId && activeCallSessionId !== callSessionId) return
+
   activeCallSessionId = null
 
   if (ringtoneTimer) {
