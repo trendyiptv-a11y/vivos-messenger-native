@@ -107,14 +107,15 @@ async function handleGlobalCallInvite(payload: unknown, userId: string, generati
 }
 
 function subscribeConversation(conversationId: string, userId: string, generation: number) {
+  const channelName = getVivosCallChannelName(conversationId)
   const channel = supabase
-    .channel(`${getVivosCallChannelName(conversationId)}:global:${userId}`)
+    .channel(channelName)
     .on("broadcast", { event: "call_invite" }, ({ payload }) => {
       void handleGlobalCallInvite(payload, userId, generation)
     })
     .subscribe((status) => {
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        console.warn("Global call invite channel status", conversationId, status)
+        console.warn("Global call invite channel status", channelName, status)
       }
     })
 
