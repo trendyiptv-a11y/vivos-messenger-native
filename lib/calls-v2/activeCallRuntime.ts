@@ -1,3 +1,9 @@
+import {
+  clearGlobalIncomingVivosCall,
+  getGlobalIncomingVivosCall,
+} from "@/lib/calls-v2/globalIncomingCallState"
+import { stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
+
 type ActiveVivosCallRuntimeState = {
   conversationId: string | null
   callSessionId: string | null
@@ -12,8 +18,28 @@ function clean(value?: string | null) {
   return typeof value === "string" && value.trim() ? value.trim() : null
 }
 
+function clearMatchingGlobalIncomingCall(args: {
+  conversationId?: string | null
+  callSessionId?: string | null
+}) {
+  const conversationId = clean(args.conversationId)
+  const callSessionId = clean(args.callSessionId)
+  const current = getGlobalIncomingVivosCall()
+
+  if (!current) return
+
+  const sameCall = callSessionId && current.callSessionId === callSessionId
+  const sameConversation = conversationId && current.conversationId === conversationId
+
+  if (!sameCall && !sameConversation) return
+
+  clearGlobalIncomingVivosCall(sameCall ? callSessionId : undefined)
+  void stopVivosCallV2Ringtone(sameCall ? callSessionId : undefined)
+}
+
 export function setActiveVivosCallConversation(conversationId?: string | null) {
   state.conversationId = clean(conversationId)
+  clearMatchingGlobalIncomingCall({ conversationId: state.conversationId })
 }
 
 export function setActiveVivosCallSession(args: {
@@ -22,6 +48,7 @@ export function setActiveVivosCallSession(args: {
 }) {
   state.conversationId = clean(args.conversationId)
   state.callSessionId = clean(args.callSessionId)
+  clearMatchingGlobalIncomingCall({ conversationId: state.conversationId, callSessionId: state.callSessionId })
 }
 
 export function clearActiveVivosCallSession(callSessionId?: string | null) {
