@@ -142,6 +142,26 @@ function shouldProcessSignal(signal: VivosCallSignalPayload | null | undefined, 
   return true
 }
 
+async function persistVivosRuntimeCallSessionId(args: {
+  callSessionId: string
+  conversationId: string
+  fromUserId: string
+  toUserId: string
+}) {
+  const { error } = await supabase
+    .from("call_sessions")
+    .update({ call_session_id: args.callSessionId })
+    .eq("conversation_id", args.conversationId)
+    .eq("caller_id", args.fromUserId)
+    .eq("callee_id", args.toUserId)
+    .eq("status", "ringing")
+    .is("call_session_id", null)
+
+  if (error) {
+    console.warn("persist VIVOS runtime call session id failed", error.message)
+  }
+}
+
 export async function sendVivosCallSignal(
   channel: RealtimeChannel | null,
   payload: VivosCallSignalPayload
@@ -168,6 +188,13 @@ export async function sendVivosCallInvite(args: {
   toUserId: string
   callType: VivosCallType
 }) {
+  await persistVivosRuntimeCallSessionId({
+    callSessionId: args.callSessionId,
+    conversationId: args.conversationId,
+    fromUserId: args.fromUserId,
+    toUserId: args.toUserId,
+  })
+
   return sendVivosCallSignal(
     args.channel,
     buildVivosCallSignalPayload({
@@ -186,7 +213,7 @@ export async function sendVivosCallAccept(args: {
   callSessionId: string
   conversationId: string
   fromUserId: string
-  toUserId?: string | null
+  toUserId: string
   callType: VivosCallType
 }) {
   return sendVivosCallSignal(
@@ -207,7 +234,7 @@ export async function sendVivosCallReject(args: {
   callSessionId: string
   conversationId: string
   fromUserId: string
-  toUserId?: string | null
+  toUserId: string
   callType: VivosCallType
 }) {
   return sendVivosCallSignal(
@@ -228,7 +255,7 @@ export async function sendVivosCallEnd(args: {
   callSessionId: string
   conversationId: string
   fromUserId: string
-  toUserId?: string | null
+  toUserId: string
   callType: VivosCallType
 }) {
   return sendVivosCallSignal(
@@ -249,7 +276,7 @@ export async function sendVivosWebRtcOffer(args: {
   callSessionId: string
   conversationId: string
   fromUserId: string
-  toUserId?: string | null
+  toUserId: string
   callType: VivosCallType
   sdp: VivosSessionDescription
 }) {
@@ -272,7 +299,7 @@ export async function sendVivosWebRtcAnswer(args: {
   callSessionId: string
   conversationId: string
   fromUserId: string
-  toUserId?: string | null
+  toUserId: string
   callType: VivosCallType
   sdp: VivosSessionDescription
 }) {
@@ -295,7 +322,7 @@ export async function sendVivosIceCandidate(args: {
   callSessionId: string
   conversationId: string
   fromUserId: string
-  toUserId?: string | null
+  toUserId: string
   callType: VivosCallType
   candidate: VivosIceCandidate
 }) {
