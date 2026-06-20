@@ -43,16 +43,38 @@ jobs:
       - name: Verify required project files and secrets
         run: |
           set -euo pipefail
-          test -f app.json
-          test -f google-services.json
-          test -f assets/images/icon.png
-          test -f assets/images/splash-icon.png
-          test -n "$EXPO_PUBLIC_SUPABASE_URL"
-          test -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
-          test -n "$VIVOS_UPLOAD_KEYSTORE_BASE64"
-          test -n "$VIVOS_UPLOAD_KEYSTORE_PASSWORD"
-          test -n "$VIVOS_UPLOAD_KEY_ALIAS"
-          test -n "$VIVOS_UPLOAD_KEY_PASSWORD"
+          missing=0
+          require_file() {
+            if [ ! -f "$1" ]; then
+              echo "Missing required file: $1"
+              missing=1
+            fi
+          }
+          require_secret() {
+            name="$1"
+            value="$2"
+            if [ -z "$value" ]; then
+              echo "Missing required GitHub secret: $name"
+              missing=1
+            else
+              echo "Found GitHub secret: $name"
+            fi
+          }
+
+          require_file app.json
+          require_file google-services.json
+          require_file assets/images/icon.png
+          require_file assets/images/splash-icon.png
+          require_secret EXPO_PUBLIC_SUPABASE_URL "$EXPO_PUBLIC_SUPABASE_URL"
+          require_secret EXPO_PUBLIC_SUPABASE_ANON_KEY "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
+          require_secret VIVOS_UPLOAD_KEYSTORE_BASE64 "$VIVOS_UPLOAD_KEYSTORE_BASE64"
+          require_secret VIVOS_UPLOAD_KEYSTORE_PASSWORD "$VIVOS_UPLOAD_KEYSTORE_PASSWORD"
+          require_secret VIVOS_UPLOAD_KEY_ALIAS "$VIVOS_UPLOAD_KEY_ALIAS"
+          require_secret VIVOS_UPLOAD_KEY_PASSWORD "$VIVOS_UPLOAD_KEY_PASSWORD"
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Generate native Android project
         run: npx expo prebuild --platform android --clean --non-interactive
