@@ -5,12 +5,7 @@ import {
   setPendingVivosCallFromNotification,
   VivosCallNotificationAction,
 } from "@/lib/calls-v2/callNotificationState"
-import {
-  startVivosCallV2Ringtone,
-  stopVivosCallV2Ringtone,
-} from "@/lib/calls-v2/callRingtone"
-import { isActiveVivosCallConversation } from "@/lib/calls-v2/activeCallRuntime"
-import { setGlobalIncomingVivosCall } from "@/lib/calls-v2/globalIncomingCallState"
+import { stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
 
 type NotificationData = {
   kind?: unknown
@@ -20,8 +15,6 @@ type NotificationData = {
   callType?: unknown
   fromUserId?: unknown
   callerUserId?: unknown
-  callerName?: unknown
-  title?: unknown
 }
 
 function asString(value: unknown) {
@@ -81,36 +74,7 @@ export function routeForegroundNotification(notification: Notifications.Notifica
   const data = (notification.request.content.data ?? {}) as NotificationData
   const kind = asString(data.kind) || asString(data.type)
 
-  if (kind !== "incoming_call_v2" && kind !== "call_v2") return
-
-  const conversationId = asString(data.conversationId)
-  const callSessionId = asString(data.callSessionId)
-  const fromUserId = asString(data.fromUserId) || asString(data.callerUserId)
-  const callerName =
-    asString(data.callerName) ||
-    asString(data.title) ||
-    notification.request.content.title ||
-    notification.request.content.body ||
-    "VIVOS"
-  const callType = data.callType === "video" ? "video" : "audio"
-
-  void startVivosCallV2Ringtone({
-    callSessionId,
-    callerName,
-    callType,
-    conversationId,
-    fromUserId,
-  })
-
-  if (!conversationId || !callSessionId || !fromUserId) return
-  if (isActiveVivosCallConversation(conversationId)) return
-
-  setGlobalIncomingVivosCall({
-    conversationId,
-    callSessionId,
-    fromUserId,
-    callerName,
-    callType,
-    action: "open",
-  })
+  // În foreground apelurile sunt conduse de Supabase Realtime + call_sessions.
+  // Push-ul de apel este ignorat aici ca să nu dubleze bannerul/ringtone-ul intern.
+  if (kind === "incoming_call_v2" || kind === "call_v2" || kind === "incoming_call") return
 }
