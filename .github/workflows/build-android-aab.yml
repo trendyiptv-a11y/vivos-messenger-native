@@ -40,6 +40,15 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Read app version
+        run: |
+          set -euo pipefail
+          VERSION_NAME="$(node -p "require('./app.json').expo.version")"
+          VERSION_CODE="$(node -p "require('./app.json').expo.android.versionCode")"
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "Building VIVOS Messenger v$VERSION_NAME code $VERSION_CODE"
+
       - name: Verify required project files and secrets
         run: |
           set -euo pipefail
@@ -131,6 +140,6 @@ jobs:
       - name: Upload signed release AAB
         uses: actions/upload-artifact@v4
         with:
-          name: vivos-messenger-release-aab-v0.1.15-code22
+          name: vivos-messenger-release-aab-v${{ env.VERSION_NAME }}-code${{ env.VERSION_CODE }}
           path: android/app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
