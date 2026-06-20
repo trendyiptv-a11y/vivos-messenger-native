@@ -93,8 +93,15 @@ jobs:
           keytool -list \
             -keystore android/app/signing/upload-keystore.jks \
             -storepass "$VIVOS_UPLOAD_KEYSTORE_PASSWORD" \
-            -alias "$VIVOS_UPLOAD_KEY_ALIAS" \
-            -v | grep -E "Alias name:|SHA256:|Creation date:"
+            -v > /tmp/vivos-keystore.txt
+
+          grep -i -E "Alias name:|SHA256:|Creation date:" /tmp/vivos-keystore.txt
+
+          if ! grep -F "Alias name: $VIVOS_UPLOAD_KEY_ALIAS" /tmp/vivos-keystore.txt >/dev/null; then
+            echo "Expected VIVOS_UPLOAD_KEY_ALIAS was not found in restored keystore."
+            echo "Check that VIVOS_UPLOAD_KEY_ALIAS matches the alias printed above."
+            exit 1
+          fi
 
       - name: Configure Android release signing
         run: |
