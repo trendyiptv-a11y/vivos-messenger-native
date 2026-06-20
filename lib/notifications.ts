@@ -27,13 +27,37 @@ type PushRegistrationResult = {
   error?: string
 }
 
+function asString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+function isIncomingCallPush(data: Record<string, unknown> | null | undefined) {
+  const kind = asString(data?.kind) || asString(data?.type)
+  return kind === "incoming_call_v2" || kind === "call_v2" || kind === "incoming_call"
+}
+
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
+  handleNotification: async (notification) => {
+    const data = (notification.request.content.data ?? {}) as Record<string, unknown>
+
+    // În foreground apelurile sunt tratate de Supabase Realtime + banner intern + ringtone.
+    // Push-ul rămâne pentru background/killed, dar nu trebuie să afișeze notificare sistem în app activă.
+    if (isIncomingCallPush(data)) {
+      return {
+        shouldShowBanner: false,
+        shouldShowList: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      }
+    }
+
+    return {
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }
+  },
 })
 
 export async function configureNotificationCategories() {
