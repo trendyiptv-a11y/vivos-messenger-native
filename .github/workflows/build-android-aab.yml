@@ -2,144 +2,83 @@ name: Build Android production AAB
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: read
+    inputs:
+      profile:
+        description: "EAS build profile"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
+      wait:
+        description: "Wait for EAS build to finish in GitHub logs"
+        required: true
+        default: true
+        type: boolean
 
 jobs:
-  build-signed-aab:
-    name: Build signed native VIVOS AAB
+  build-android-aab:
+    name: Build Android App Bundle with EAS
     runs-on: ubuntu-latest
-
     env:
       EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
-      VIVOS_UPLOAD_KEYSTORE_BASE64: ${{ secrets.VIVOS_UPLOAD_KEYSTORE_BASE64 }}
-      VIVOS_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.VIVOS_UPLOAD_KEYSTORE_PASSWORD }}
-      VIVOS_UPLOAD_KEY_ALIAS: ${{ secrets.VIVOS_UPLOAD_KEY_ALIAS }}
-      VIVOS_UPLOAD_KEY_PASSWORD: ${{ secrets.VIVOS_UPLOAD_KEY_PASSWORD }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
       - name: Install dependencies
         run: npm install
 
-      - name: Read app version
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Inject Supabase env into selected EAS profile
         run: |
-          set -euo pipefail
-          VERSION_NAME="$(node -p "require('./app.json').expo.version")"
-          VERSION_CODE="$(node -p "require('./app.json').expo.android.versionCode")"
-          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
-          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
-          echo "Building VIVOS Messenger v$VERSION_NAME code $VERSION_CODE"
-
-      - name: Verify required project files and secrets
-        run: |
-          set -euo pipefail
-          missing=0
-          require_file() {
-            if [ ! -f "$1" ]; then
-              echo "Missing required file: $1"
-              missing=1
-            fi
-          }
-          require_secret() {
-            name="$1"
-            value="$2"
-            if [ -z "$value" ]; then
-              echo "Missing required GitHub secret: $name"
-              missing=1
-            else
-              echo "Found GitHub secret: $name"
-            fi
-          }
-
-          require_file app.json
-          require_file google-services.json
-          require_file assets/images/icon.png
-          require_file assets/images/splash-icon.png
-          require_secret EXPO_PUBLIC_SUPABASE_URL "$EXPO_PUBLIC_SUPABASE_URL"
-          require_secret EXPO_PUBLIC_SUPABASE_ANON_KEY "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
-          require_secret VIVOS_UPLOAD_KEYSTORE_BASE64 "$VIVOS_UPLOAD_KEYSTORE_BASE64"
-          require_secret VIVOS_UPLOAD_KEYSTORE_PASSWORD "$VIVOS_UPLOAD_KEYSTORE_PASSWORD"
-          require_secret VIVOS_UPLOAD_KEY_ALIAS "$VIVOS_UPLOAD_KEY_ALIAS"
-          require_secret VIVOS_UPLOAD_KEY_PASSWORD "$VIVOS_UPLOAD_KEY_PASSWORD"
-
-          if [ "$missing" -ne 0 ]; then
-            exit 1
-          fi
-
-      - name: Generate native Android project
-        run: npx expo prebuild --platform android --clean --non-interactive
-
-      - name: Restore upload keystore
-        run: |
-          set -euo pipefail
-          mkdir -p android/app/signing
-          printf '%s' "$VIVOS_UPLOAD_KEYSTORE_BASE64" | tr -d '\n\r ' | base64 --decode > android/app/signing/upload-keystore.jks
-          test -s android/app/signing/upload-keystore.jks
-          echo "Keystore restored: $(wc -c < android/app/signing/upload-keystore.jks) bytes"
-
-      - name: Verify upload keystore
-        run: |
-          set -euo pipefail
-          keytool -list \
-            -keystore android/app/signing/upload-keystore.jks \
-            -storepass "$VIVOS_UPLOAD_KEYSTORE_PASSWORD" \
-            -v | grep -i -E "Alias name:|SHA256:|Creation date:" || true
-
-      - name: Configure Android release signing
-        run: |
-          set -euo pipefail
           node - <<'NODE'
           const fs = require('fs')
-          const path = 'android/app/build.gradle'
-          let text = fs.readFileSync(path, 'utf8')
+          const profile = process.env.EAS_BUILD_PROFILE || 'production'
+          const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || ''
+          const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || ''
 
-          if (!text.includes('vivosUpload {')) {
-            const signingBlock = /signingConfigs\s*\{[\s\S]*?debug\s*\{[\s\S]*?\n\s*\}/m
-            if (!signingBlock.test(text)) {
-              throw new Error('Could not find Android signingConfigs debug block')
-            }
-
-            text = text.replace(signingBlock, (match) => `${match}\n        vivosUpload {\n            storeFile file("signing/upload-keystore.jks")\n            storePassword System.getenv("VIVOS_UPLOAD_KEYSTORE_PASSWORD")\n            keyAlias System.getenv("VIVOS_UPLOAD_KEY_ALIAS")\n            keyPassword System.getenv("VIVOS_UPLOAD_KEY_PASSWORD")\n        }`)
+          if (!supabaseUrl || !supabaseAnonKey) {
+            throw new Error('Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY GitHub secret')
           }
 
-          text = text.replace(/release\s*\{([\s\S]*?)signingConfig\s+signingConfigs\.debug/m, 'release {$1signingConfig signingConfigs.vivosUpload')
-
-          if (!text.includes('signingConfig signingConfigs.vivosUpload')) {
-            throw new Error('Release signingConfig was not switched to vivosUpload')
+          const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'))
+          eas.build = eas.build || {}
+          eas.build[profile] = eas.build[profile] || {}
+          eas.build[profile].env = {
+            ...(eas.build[profile].env || {}),
+            EXPO_PUBLIC_SUPABASE_URL: supabaseUrl,
+            EXPO_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey,
           }
-
-          fs.writeFileSync(path, text)
+          fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2))
           NODE
+        env:
+          EAS_BUILD_PROFILE: ${{ inputs.profile }}
 
-      - name: Build signed release AAB
-        working-directory: android
+      - name: Verify Expo project assets
         run: |
-          set -euo pipefail
-          chmod +x ./gradlew
-          ./gradlew clean bundleRelease --stacktrace
+          test -f app.json
+          test -f eas.json
+          test -f google-services.json
+          test -f assets/images/icon.png
+          test -f assets/images/splash-icon.png
 
-      - name: Upload signed release AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: vivos-messenger-release-aab-v${{ env.VERSION_NAME }}-code${{ env.VERSION_CODE }}
-          path: android/app/build/outputs/bundle/release/*.aab
-          if-no-files-found: error
+      - name: Build Android production AAB
+        run: |
+          if [ "${{ inputs.wait }}" = "true" ]; then
+            eas build --platform android --profile "${{ inputs.profile }}" --non-interactive --wait
+          else
+            eas build --platform android --profile "${{ inputs.profile }}" --non-interactive --no-wait
+          fi
