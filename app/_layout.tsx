@@ -12,11 +12,12 @@ import {
   registerVivosCallV2NotifeeEvents,
   setupVivosCallV2NotificationChannel,
 } from "@/lib/calls-v2/notifeeCallV2"
-import { stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
+import { startVivosCallV2Ringtone, stopVivosCallV2Ringtone } from "@/lib/calls-v2/callRingtone"
 import { registerVivosCallV2FcmForegroundHandler } from "@/lib/calls-v2/fcmCallHandler"
 import { consumePendingCallNotificationRoute } from "@/lib/calls-v2/callNotificationRoute"
 import { setPendingVivosCallFromNotification } from "@/lib/calls-v2/callNotificationState"
 import { startGlobalVivosCallInviteListener, stopGlobalVivosCallInviteListener } from "@/lib/calls-v2/globalCallInviteListener"
+import { setGlobalIncomingVivosCall } from "@/lib/calls-v2/globalIncomingCallState"
 import { startPresenceHeartbeat, stopPresenceHeartbeat } from "@/lib/presence/userPresence"
 import { supabase } from "@/lib/supabase"
 import { theme } from "@/lib/theme"
@@ -118,9 +119,23 @@ export default function RootLayout() {
       router.push({ pathname: "/chat/[id]", params: { id: conversationId } })
     })
 
-    const fcmUnsubscribe = registerVivosCallV2FcmForegroundHandler(() => {
-      // Foreground calls are handled by Supabase Realtime + call_sessions.
-      // FCM foreground messages are acknowledged here only to prevent Notifee/system notification duplication.
+    const fcmUnsubscribe = registerVivosCallV2FcmForegroundHandler((call) => {
+      void startVivosCallV2Ringtone({
+        callSessionId: call.callSessionId,
+        callerName: call.callerName,
+        callType: call.callType,
+        conversationId: call.conversationId,
+        fromUserId: call.fromUserId,
+      })
+
+      setGlobalIncomingVivosCall({
+        conversationId: call.conversationId,
+        callSessionId: call.callSessionId,
+        fromUserId: call.fromUserId,
+        callerName: call.callerName,
+        callType: call.callType,
+        action: "open",
+      })
     })
 
     const appStateSubscription = AppState.addEventListener("change", (state) => {
