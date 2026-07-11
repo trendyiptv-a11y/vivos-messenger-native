@@ -11,6 +11,10 @@ import { t } from "@/lib/i18n"
 import { gradientTextSeed, theme } from "@/lib/theme"
 import { fetchPresenceMap, getPresenceInfo, UserPresenceRow } from "@/lib/presence/userPresence"
 
+const INBOX_CONVERSATION_LIMIT = 25
+const INBOX_MESSAGE_LIMIT = 150
+const INBOX_RELOAD_DEBOUNCE_MS = 900
+
 type ConversationRow = { id: string; created_at: string }
 type MemberRow = { member_id: string; name: string | null; alias: string | null; email: string | null }
 type MemberGroup = { conversation_id: string; members: MemberRow[] }
@@ -31,6 +35,7 @@ export default function InboxScreen() {
   const router = useRouter()
   const mountedRef = useRef(true)
   const loadBusyRef = useRef(false)
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
@@ -44,15 +49,16 @@ export default function InboxScreen() {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current)
     }
   }, [])
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (showSpinner = true) => {
     if (loadBusyRef.current) return
     loadBusyRef.current = true
 
     try {
-      if (mountedRef.current) setLoading(true)
+      if (showSpinner && mountedRef.current) setLoading(true)
 
       const {
         data: { session },
@@ -71,7 +77,7 @@ export default function InboxScreen() {
         .from("conversations")
         .select("id, created_at")
         .order("created_at", { ascending: false })
-        .limit(50)
+        .limit(INBOX_CONVERSATION_LIMIT)
 
       if (convError) throw convError
       if (!mountedRef.current) return
@@ -121,7 +127,8 @@ export default function InboxScreen() {
           .from("messages")
           .select("id, conversation_id, body, created_at")
           .in("conversation_id", ids)
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
+          .limit(INBOX_MESSAGE_LIMIT),
         supabase
           .from("notifications")
           .select("id, ref_id")
@@ -166,22 +173,27 @@ export default function InboxScreen() {
     }
   }, [router])
 
+  const scheduleReload = useCallback(() => {
+    if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current)
+    reloadTimerRef.current = setTimeout(() => {
+      reloadTimerRef.current = null
+      if (mountedRef.current) void load(false)
+    }, INBOX_RELOAD_DEBOUNCE_MS)
+  }, [load])
+
   useEffect(() => {
     let active = true
-    load()
+    load(true)
 
     const channelName = `native-inbox-live:${Date.now()}:${Math.random().toString(36).slice(2)}`
     const channel = supabase.channel(channelName)
 
     channel
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
-        if (active && mountedRef.current) load()
+        if (active && mountedRef.current) scheduleReload()
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => {
-        if (active && mountedRef.current) load()
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_presence" }, () => {
-        if (active && mountedRef.current) load()
+        if (active && mountedRef.current) scheduleReload()
       })
 
     channel.subscribe((status) => {
@@ -192,11 +204,12 @@ export default function InboxScreen() {
 
     return () => {
       active = false
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current)
       supabase.removeChannel(channel).catch((error) => {
         console.warn("inbox channel cleanup failed", error)
       })
     }
-  }, [load])
+  }, [load, scheduleReload])
 
   const cards = useMemo<ConvCard[]>(() => {
     return conversations
