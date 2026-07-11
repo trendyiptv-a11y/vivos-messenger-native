@@ -59,6 +59,10 @@ import {
 } from "@/lib/calls-v2/activeCallRuntime"
 import { cancelVivosCallV2IncomingNotification } from "@/lib/calls-v2/notifeeCallV2"
 import {
+  startVivosCallForegroundService,
+  stopVivosCallForegroundService,
+} from "@/lib/calls-v2/callForegroundService"
+import {
   createCallHistorySession,
   markCallHistoryAccepted,
   markCallHistoryCancelled,
@@ -199,6 +203,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
   const prepareLocalPeer = useCallback(
     async (callType: VivosCallType) => {
       const media = await startLocalMedia(callType)
+      await startVivosCallForegroundService(callType)
       await createVivosPeerConnection(callType)
       const audioRoute = await startVivosAudioRoute(callType)
 
@@ -238,6 +243,7 @@ export function useVivosCallV2({ conversationId, userId, remoteUserId, selfName 
     await stopVivosAudioRoute()
     await closeVivosPeerConnection()
     await stopLocalMedia()
+    await stopVivosCallForegroundService()
     clearActiveVivosCallSession(previousCallSessionId)
     currentCallRef.current = {
       callSessionId: null,
