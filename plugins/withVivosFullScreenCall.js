@@ -12,6 +12,24 @@ function getMainApplication(manifest) {
   return applications[0] || null
 }
 
+function ensureNotifeeForegroundService(application) {
+  if (!application) return
+
+  application.service = application.service || []
+  const services = application.service
+  const serviceName = "app.notifee.core.ForegroundService"
+  let service = services.find((item) => item?.$?.["android:name"] === serviceName)
+
+  if (!service) {
+    service = { $: { "android:name": serviceName } }
+    services.push(service)
+  }
+
+  service.$ = service.$ || {}
+  service.$["android:foregroundServiceType"] = "microphone"
+  service.$["android:exported"] = "false"
+}
+
 function isMainActivity(activity) {
   const intentFilters = activity?.["intent-filter"] || []
   return intentFilters.some((filter) => {
@@ -33,8 +51,12 @@ function withVivosFullScreenCall(config) {
     const manifest = config.modResults
     ensurePermission(manifest, "android.permission.USE_FULL_SCREEN_INTENT")
     ensurePermission(manifest, "android.permission.WAKE_LOCK")
+    ensurePermission(manifest, "android.permission.FOREGROUND_SERVICE")
+    ensurePermission(manifest, "android.permission.FOREGROUND_SERVICE_MICROPHONE")
 
     const mainApplication = getMainApplication(manifest)
+    ensureNotifeeForegroundService(mainApplication)
+
     const mainActivity = mainApplication ? getMainActivity(mainApplication) : null
 
     if (mainActivity?.$) {
