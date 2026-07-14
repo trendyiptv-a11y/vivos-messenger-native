@@ -1,4 +1,5 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native"
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Ionicons } from "@expo/vector-icons"
 import { theme } from "@/lib/theme"
 
 type MessageRow = {
@@ -6,6 +7,10 @@ type MessageRow = {
   sender_id: string
   body: string
   created_at: string
+  attachment_url?: string | null
+  attachment_type?: string | null
+  attachment_name?: string | null
+  attachment_size?: number | null
 }
 
 type Props = {
@@ -28,6 +33,46 @@ function formatTime(dateString: string) {
     hour: "2-digit",
     minute: "2-digit",
   })
+}
+
+function formatSize(value?: number | null) {
+  if (!value || value < 1) return null
+  if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`
+  return `${(value / 1024 / 1024).toFixed(1)} MB`
+}
+
+function iconForAttachment(type?: string | null) {
+  if (type === "image") return "image-outline"
+  if (type === "video") return "videocam-outline"
+  return "document-attach-outline"
+}
+
+function AttachmentPreview({ msg, mine }: { msg: MessageRow; mine: boolean }) {
+  const url = msg.attachment_url || null
+  if (!url) return null
+
+  if (msg.attachment_type === "image") {
+    return (
+      <Pressable onPress={() => Linking.openURL(url).catch(() => {})}>
+        <Image source={{ uri: url }} style={styles.attachmentImage} resizeMode="cover" />
+      </Pressable>
+    )
+  }
+
+  const size = formatSize(msg.attachment_size)
+  return (
+    <Pressable onPress={() => Linking.openURL(url).catch(() => {})} style={[styles.attachmentCard, mine ? styles.attachmentCardMine : styles.attachmentCardOther]}>
+      <Ionicons name={iconForAttachment(msg.attachment_type) as any} size={24} color={mine ? "white" : theme.colors.text} />
+      <View style={styles.attachmentTextWrap}>
+        <Text numberOfLines={1} style={[styles.attachmentName, mine ? styles.bubbleTextMine : styles.bubbleTextOther]}>
+          {msg.attachment_name || "Atașament"}
+        </Text>
+        <Text style={[styles.attachmentMeta, mine ? styles.bubbleTimeMine : styles.bubbleTimeOther]}>
+          {msg.attachment_type === "video" ? "Video" : "Fișier"}{size ? ` · ${size}` : ""}
+        </Text>
+      </View>
+    </Pressable>
+  )
 }
 
 export function MessageBubbleList({ scrollRef, loading, messages, userId }: Props) {
@@ -53,7 +98,8 @@ export function MessageBubbleList({ scrollRef, loading, messages, userId }: Prop
               ) : null}
               <View style={[styles.bubbleRow, mine ? styles.bubbleRight : styles.bubbleLeft]}>
                 <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
-                  <Text style={[styles.bubbleText, mine ? styles.bubbleTextMine : styles.bubbleTextOther]}>{msg.body}</Text>
+                  <AttachmentPreview msg={msg} mine={mine} />
+                  {msg.body ? <Text style={[styles.bubbleText, mine ? styles.bubbleTextMine : styles.bubbleTextOther]}>{msg.body}</Text> : null}
                   <Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeOther]}>{formatTime(msg.created_at)}</Text>
                 </View>
               </View>
@@ -104,10 +150,11 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   bubble: {
-    maxWidth: "78%",
+    maxWidth: "82%",
     borderRadius: 22,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    gap: 7,
   },
   bubbleMine: {
     backgroundColor: "rgba(201,106,161,0.88)",
@@ -129,7 +176,7 @@ const styles = StyleSheet.create({
   },
   bubbleTime: {
     alignSelf: "flex-end",
-    marginTop: 6,
+    marginTop: 2,
     fontSize: 11,
   },
   bubbleTimeMine: {
@@ -137,5 +184,38 @@ const styles = StyleSheet.create({
   },
   bubbleTimeOther: {
     color: theme.colors.textDim,
+  },
+  attachmentImage: {
+    width: 210,
+    height: 150,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.18)",
+  },
+  attachmentCard: {
+    width: 230,
+    minHeight: 58,
+    borderRadius: 16,
+    padding: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  attachmentCardMine: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  attachmentCardOther: {
+    backgroundColor: "rgba(255,255,255,0.07)",
+  },
+  attachmentTextWrap: {
+    flex: 1,
+  },
+  attachmentName: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  attachmentMeta: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: "600",
   },
 })
