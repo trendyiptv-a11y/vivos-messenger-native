@@ -76,8 +76,20 @@ function AttachmentPreview({ msg, mine }: { msg: MessageRow; mine: boolean }) {
 }
 
 export function MessageBubbleList({ scrollRef, loading, messages, userId }: Props) {
+  function scrollToLatest(animated = false) {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated })
+    })
+  }
+
   return (
-    <ScrollView ref={scrollRef} contentContainerStyle={styles.messagesWrap}>
+    <ScrollView
+      ref={scrollRef}
+      contentContainerStyle={styles.messagesWrap}
+      onContentSizeChange={() => {
+        if (!loading && messages.length > 0) scrollToLatest(false)
+      }}
+    >
       {loading ? (
         <Text style={styles.helper}>Se încarcă conversația...</Text>
       ) : messages.length === 0 ? (
