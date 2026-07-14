@@ -30,6 +30,7 @@ export default function ChatScreenIntegrated() {
     scrollRef,
     loading,
     sending,
+    attaching,
     userId,
     messages,
     body,
@@ -38,6 +39,9 @@ export default function ChatScreenIntegrated() {
     otherName,
     selfName,
     handleSend,
+    handlePickPhoto,
+    handlePickVideo,
+    handlePickFile,
   } = useChatConversation(conversationId)
 
   useEffect(() => {
@@ -170,7 +174,16 @@ export default function ChatScreenIntegrated() {
             </View>
           </ScrollView>
 
-          <ChatInputBar value={body} onChangeText={setBody} onSend={handleSend} sending={sending} />
+          <ChatInputBar
+            value={body}
+            onChangeText={setBody}
+            onSend={handleSend}
+            onPickPhoto={handlePickPhoto}
+            onPickVideo={handlePickVideo}
+            onPickFile={handlePickFile}
+            sending={sending}
+            attaching={attaching}
+          />
         </KeyboardAvoidingView>
 
         <VivosCallV2Overlay
