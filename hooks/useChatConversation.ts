@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ScrollView } from "react-native"
 import { useRouter } from "expo-router"
 import { supabase } from "@/lib/supabase"
 import { sendMessagePush } from "@/lib/push"
@@ -39,7 +38,6 @@ const MESSAGE_SELECT = "id, sender_id, body, created_at, attachment_url, attachm
 
 export function useChatConversation(conversationId: string) {
   const router = useRouter()
-  const scrollRef = useRef<ScrollView | null>(null)
   const mountedRef = useRef(true)
 
   const [loading, setLoading] = useState(true)
@@ -196,11 +194,6 @@ export function useChatConversation(conversationId: string) {
             if (prev.some((msg) => msg.id === incoming.id)) return prev
             return [...prev, incoming]
           })
-          requestAnimationFrame(() => {
-            if (active && mountedRef.current) {
-              scrollRef.current?.scrollToEnd({ animated: true })
-            }
-          })
         }
       )
       .subscribe()
@@ -212,14 +205,6 @@ export function useChatConversation(conversationId: string) {
       })
     }
   }, [conversationId])
-
-  useEffect(() => {
-    if (!messages.length) return
-    const timer = setTimeout(() => {
-      if (mountedRef.current) scrollRef.current?.scrollToEnd({ animated: false })
-    }, 80)
-    return () => clearTimeout(timer)
-  }, [messages.length])
 
   const otherMember = useMemo(() => members.find((member) => member.member_id !== userId) || null, [members, userId])
   const selfMember = useMemo(() => members.find((member) => member.member_id === userId) || null, [members, userId])
@@ -312,7 +297,6 @@ export function useChatConversation(conversationId: string) {
   }
 
   return {
-    scrollRef,
     loading,
     sending,
     attaching,
