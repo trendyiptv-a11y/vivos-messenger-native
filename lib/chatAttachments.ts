@@ -1,5 +1,7 @@
 import * as DocumentPicker from "expo-document-picker"
+import * as FileSystem from "expo-file-system"
 import * as ImagePicker from "expo-image-picker"
+import { decode } from "base64-arraybuffer"
 import { supabase } from "@/lib/supabase"
 
 export type ChatAttachmentKind = "image" | "video" | "file"
@@ -50,6 +52,14 @@ function nameFromUri(uri: string, kind: ChatAttachmentKind, mimeType: string) {
   const fallbackExt = kind === "image" ? "jpg" : kind === "video" ? "mp4" : "bin"
   const ext = extensionFromMime(mimeType, fallbackExt)
   return `${kind}-${Date.now()}.${ext}`
+}
+
+async function getUploadData(uri: string) {
+  const base64 = await FileSystem.readAsStringAsync(uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  })
+
+  return decode(base64)
 }
 
 export async function pickChatPhoto(): Promise<PickedChatAttachment | null> {
@@ -118,14 +128,13 @@ export async function pickChatFile(): Promise<PickedChatAttachment | null> {
 }
 
 export async function uploadChatAttachment(conversationId: string, userId: string, attachment: PickedChatAttachment): Promise<UploadedChatAttachment> {
-  const response = await fetch(attachment.uri)
-  const blob = await response.blob()
+  const fileData = await getUploadData(attachment.uri)
   const random = Math.random().toString(36).slice(2, 10)
   const path = `${conversationId}/${userId}/${Date.now()}-${random}-${safeFileName(attachment.name)}`
 
   const { data, error } = await supabase.storage
     .from(BUCKET_NAME)
-    .upload(path, blob, {
+    .upload(path, fileData, {
       contentType: attachment.mimeType,
       upsert: false,
     })
