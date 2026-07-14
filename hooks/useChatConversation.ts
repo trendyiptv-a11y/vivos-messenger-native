@@ -3,12 +3,24 @@ import { ScrollView } from "react-native"
 import { useRouter } from "expo-router"
 import { supabase } from "@/lib/supabase"
 import { sendMessagePush } from "@/lib/push"
+import {
+  attachmentBodyLabel,
+  pickChatFile,
+  pickChatPhoto,
+  pickChatVideo,
+  PickedChatAttachment,
+  uploadChatAttachment,
+} from "@/lib/chatAttachments"
 
 type MessageRow = {
   id: string
   sender_id: string
   body: string
   created_at: string
+  attachment_url?: string | null
+  attachment_type?: string | null
+  attachment_name?: string | null
+  attachment_size?: number | null
 }
 
 type MemberRow = {
@@ -23,6 +35,8 @@ type NotificationRefRow = {
   ref_id: string | null
 }
 
+const MESSAGE_SELECT = "id, sender_id, body, created_at, attachment_url, attachment_type, attachment_name, attachment_size"
+
 export function useChatConversation(conversationId: string) {
   const router = useRouter()
   const scrollRef = useRef<ScrollView | null>(null)
@@ -30,6 +44,7 @@ export function useChatConversation(conversationId: string) {
 
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [attaching, setAttaching] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [messages, setMessages] = useState<MessageRow[]>([])
   const [members, setMembers] = useState<MemberRow[]>([])
@@ -70,7 +85,7 @@ export function useChatConversation(conversationId: string) {
         const [{ data: messageData }, { data: memberData }] = await Promise.all([
           supabase
             .from("messages")
-            .select("id, sender_id, body, created_at")
+            .select(MESSAGE_SELECT)
             .eq("conversation_id", conversationId)
             .order("created_at", { ascending: true }),
           supabase.rpc("get_conversation_members_with_profiles", {
@@ -211,38 +226,88 @@ export function useChatConversation(conversationId: string) {
   const otherName = otherMember?.name?.trim() || otherMember?.alias?.trim() || otherMember?.email?.trim() || "Membru"
   const selfName = selfMember?.name?.trim() || selfMember?.alias?.trim() || selfMember?.email?.trim() || "VIVOS"
 
+  async function insertMessage(text: string, attachment?: {
+    attachment_url: string
+    attachment_type: string
+    attachment_name: string
+    attachment_size: number | null
+  }) {
+    if (!userId) return null
+
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        sender_id: userId,
+        body: text,
+        ...(attachment ?? {}),
+      })
+      .select("id")
+      .single()
+
+    if (error) throw error
+    return data?.id as string | undefined
+  }
+
   async function handleSend() {
     const text = bodyRef.current.trim()
-    if (!text || !userId || sending) return
+    if (!text || !userId || sending || attaching) return
     setSending(true)
 
     try {
-      const { data, error } = await supabase
-        .from("messages")
-        .insert({
-          conversation_id: conversationId,
-          sender_id: userId,
-          body: text,
-        })
-        .select("id")
-        .single()
+      const messageId = await insertMessage(text)
 
-      if (!error && mountedRef.current) {
+      if (mountedRef.current) {
         bodyRef.current = ""
         setBody("")
       }
 
-      if (!error && otherMember?.member_id) {
+      if (otherMember?.member_id) {
         sendMessagePush({
           targetUserId: otherMember.member_id,
           conversationId,
           senderName: selfName,
           message: text,
-          messageId: data?.id,
+          messageId,
         })
       }
+    } catch (error) {
+      console.warn("send message failed", error)
     } finally {
       if (mountedRef.current) setSending(false)
+    }
+  }
+
+  async function sendAttachment(picker: () => Promise<PickedChatAttachment | null>) {
+    if (!userId || !conversationId || sending || attaching) return
+    setAttaching(true)
+
+    try {
+      const picked = await picker()
+      if (!picked) return
+
+      const uploaded = await uploadChatAttachment(conversationId, userId, picked)
+      const text = attachmentBodyLabel(uploaded.kind, uploaded.name)
+      const messageId = await insertMessage(text, {
+        attachment_url: uploaded.publicUrl,
+        attachment_type: uploaded.kind,
+        attachment_name: uploaded.name,
+        attachment_size: uploaded.size,
+      })
+
+      if (otherMember?.member_id) {
+        sendMessagePush({
+          targetUserId: otherMember.member_id,
+          conversationId,
+          senderName: selfName,
+          message: text,
+          messageId,
+        })
+      }
+    } catch (error) {
+      console.warn("send attachment failed", error)
+    } finally {
+      if (mountedRef.current) setAttaching(false)
     }
   }
 
@@ -250,6 +315,7 @@ export function useChatConversation(conversationId: string) {
     scrollRef,
     loading,
     sending,
+    attaching,
     userId,
     messages,
     members,
@@ -259,5 +325,8 @@ export function useChatConversation(conversationId: string) {
     otherName,
     selfName,
     handleSend,
+    handlePickPhoto: () => sendAttachment(pickChatPhoto),
+    handlePickVideo: () => sendAttachment(pickChatVideo),
+    handlePickFile: () => sendAttachment(pickChatFile),
   }
 }
