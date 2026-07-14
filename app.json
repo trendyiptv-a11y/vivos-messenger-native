@@ -4,7 +4,7 @@
     "name": "VIVOS Messenger",
     "slug": "vivos-messenger-native",
     "scheme": "vivosmessenger",
-    "version": "0.1.21",
+    "version": "0.1.22",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/images/icon.png",
@@ -22,12 +22,13 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "VIVOS Messenger folosește camera pentru apeluri video.",
-        "NSMicrophoneUsageDescription": "VIVOS Messenger folosește microfonul pentru apeluri audio și video."
+        "NSMicrophoneUsageDescription": "VIVOS Messenger folosește microfonul pentru apeluri audio și video.",
+        "NSPhotoLibraryUsageDescription": "VIVOS Messenger folosește biblioteca foto pentru trimiterea de poze și video în conversații."
       }
     },
     "android": {
       "package": "app.vivos.messenger",
-      "versionCode": 28,
+      "versionCode": 29,
       "googleServicesFile": "./google-services.json",
       "icon": "./assets/images/icon.png",
       "adaptiveIcon": {
@@ -44,6 +45,9 @@
         "android.permission.WAKE_LOCK",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_CONNECT"
       ]
@@ -52,6 +56,8 @@
       "expo-router",
       "expo-localization",
       "expo-notifications",
+      "expo-image-picker",
+      "expo-document-picker",
       "./plugins/withVivosFullScreenCall",
       [
         "expo-dev-client",
