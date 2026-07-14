@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { KeyboardAvoidingView, Platform, StyleSheet, ScrollView, Text, View } from "react-native"
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 import { supabase } from "@/lib/supabase"
@@ -27,7 +27,6 @@ export default function ChatScreenIntegrated() {
   const [presenceMap, setPresenceMap] = useState<Record<string, UserPresenceRow>>({})
 
   const {
-    scrollRef,
     loading,
     sending,
     attaching,
@@ -163,16 +162,9 @@ export default function ChatScreenIntegrated() {
         ) : null}
 
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <ScrollView
-            style={styles.flex}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.messagesWrap}>
-              <MessageBubbleList scrollRef={scrollRef} loading={loading} messages={messages} userId={userId} />
-            </View>
-          </ScrollView>
+          <View style={styles.messagesWrap}>
+            <MessageBubbleList loading={loading} messages={messages} userId={userId} />
+          </View>
 
           <ChatInputBar
             value={body}
@@ -220,10 +212,6 @@ const styles = StyleSheet.create({
     color: theme.colors.textDim,
     fontSize: 12,
     lineHeight: 16,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 12,
   },
   messagesWrap: {
     flex: 1,
