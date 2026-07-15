@@ -7,6 +7,8 @@ type Props = {
   value: string
   onChangeText: (value: string) => void
   onSend: () => void
+  onCapturePhoto: () => void
+  onCaptureVideo: () => void
   onPickPhoto: () => void
   onPickVideo: () => void
   onPickFile: () => void
@@ -14,7 +16,18 @@ type Props = {
   attaching?: boolean
 }
 
-export function ChatInputBar({ value, onChangeText, onSend, onPickPhoto, onPickVideo, onPickFile, sending, attaching = false }: Props) {
+export function ChatInputBar({
+  value,
+  onChangeText,
+  onSend,
+  onCapturePhoto,
+  onCaptureVideo,
+  onPickPhoto,
+  onPickVideo,
+  onPickFile,
+  sending,
+  attaching = false,
+}: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
   const disabled = sending || attaching || !value.trim()
 
@@ -47,13 +60,22 @@ export function ChatInputBar({ value, onChangeText, onSend, onPickPhoto, onPickV
         <Pressable style={styles.backdrop} onPress={() => setMenuOpen(false)}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Adaugă în conversație</Text>
+            <Pressable style={styles.sheetOption} onPress={() => choose(onCapturePhoto)}>
+              <Ionicons name="camera-outline" size={22} color={theme.colors.text} />
+              <Text style={styles.sheetOptionText}>Fă poză</Text>
+            </Pressable>
+            <Pressable style={styles.sheetOption} onPress={() => choose(onCaptureVideo)}>
+              <Ionicons name="videocam-outline" size={22} color={theme.colors.text} />
+              <Text style={styles.sheetOptionText}>Filmează</Text>
+            </Pressable>
+            <View style={styles.sheetDivider} />
             <Pressable style={styles.sheetOption} onPress={() => choose(onPickPhoto)}>
               <Ionicons name="image-outline" size={22} color={theme.colors.text} />
-              <Text style={styles.sheetOptionText}>Foto</Text>
+              <Text style={styles.sheetOptionText}>Alege foto</Text>
             </Pressable>
             <Pressable style={styles.sheetOption} onPress={() => choose(onPickVideo)}>
-              <Ionicons name="videocam-outline" size={22} color={theme.colors.text} />
-              <Text style={styles.sheetOptionText}>Video</Text>
+              <Ionicons name="albums-outline" size={22} color={theme.colors.text} />
+              <Text style={styles.sheetOptionText}>Alege video</Text>
             </Pressable>
             <Pressable style={styles.sheetOption} onPress={() => choose(onPickFile)}>
               <Ionicons name="document-attach-outline" size={22} color={theme.colors.text} />
@@ -145,5 +167,10 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: 16,
     fontWeight: "700",
+  },
+  sheetDivider: {
+    height: 1,
+    marginVertical: 3,
+    backgroundColor: theme.colors.border,
   },
 })
