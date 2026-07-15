@@ -4,6 +4,8 @@ import { supabase } from "@/lib/supabase"
 import { sendMessagePush } from "@/lib/push"
 import {
   attachmentBodyLabel,
+  captureChatPhoto,
+  captureChatVideo,
   pickChatFile,
   pickChatPhoto,
   pickChatVideo,
@@ -321,6 +323,8 @@ export function useChatConversation(conversationId: string) {
     otherName,
     selfName,
     handleSend,
+    handleCapturePhoto: () => sendAttachment(captureChatPhoto),
+    handleCaptureVideo: () => sendAttachment(captureChatVideo),
     handlePickPhoto: () => sendAttachment(pickChatPhoto),
     handlePickVideo: () => sendAttachment(pickChatVideo),
     handlePickFile: () => sendAttachment(pickChatFile),
