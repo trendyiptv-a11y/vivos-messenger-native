@@ -38,6 +38,8 @@ export default function ChatScreenIntegrated() {
     otherName,
     selfName,
     handleSend,
+    handleCapturePhoto,
+    handleCaptureVideo,
     handlePickPhoto,
     handlePickVideo,
     handlePickFile,
@@ -170,6 +172,8 @@ export default function ChatScreenIntegrated() {
             value={body}
             onChangeText={setBody}
             onSend={handleSend}
+            onCapturePhoto={handleCapturePhoto}
+            onCaptureVideo={handleCaptureVideo}
             onPickPhoto={handlePickPhoto}
             onPickVideo={handlePickVideo}
             onPickFile={handlePickFile}
