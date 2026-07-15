@@ -8,6 +8,7 @@ import { ScreenHeader, HeaderIconButton } from "@/components/ui/ScreenHeader"
 import { ChatHeaderActions } from "@/components/messenger/ChatHeaderActions"
 import { ChatInputBar } from "@/components/messenger/ChatInputBar"
 import { MessageBubbleList } from "@/components/messenger/MessageBubbleList"
+import { StickerPicker } from "@/components/messenger/StickerPicker"
 import { PresencePill } from "@/components/presence/PresencePill"
 import { VivosCallV2Overlay } from "@/components/calls-v2/VivosCallV2Overlay"
 import { useChatConversation } from "@/hooks/useChatConversation"
@@ -19,12 +20,14 @@ import {
 import { fetchPresenceMap, getPresenceInfo, updateOwnPresence, UserPresenceRow } from "@/lib/presence/userPresence"
 import { theme } from "@/lib/theme"
 import { unregisterPushToken } from "@/lib/notifications"
+import { VivosStickerId } from "@/lib/stickers/vivosSmilePack"
 
 export default function ChatScreenIntegrated() {
   const router = useRouter()
   const params = useLocalSearchParams<{ id: string }>()
   const conversationId = String(params.id || "")
   const [presenceMap, setPresenceMap] = useState<Record<string, UserPresenceRow>>({})
+  const [stickerPickerOpen, setStickerPickerOpen] = useState(false)
 
   const {
     loading,
@@ -38,6 +41,7 @@ export default function ChatScreenIntegrated() {
     otherName,
     selfName,
     handleSend,
+    handleSendSticker,
     handleCapturePhoto,
     handleCaptureVideo,
     handlePickPhoto,
@@ -115,6 +119,7 @@ export default function ChatScreenIntegrated() {
 
   function handleBackToInbox() {
     setMenuOpen(false)
+    setStickerPickerOpen(false)
 
     if (router.canGoBack()) {
       router.back()
@@ -122,6 +127,11 @@ export default function ChatScreenIntegrated() {
     }
 
     router.replace("/inbox")
+  }
+
+  async function handleStickerSelect(stickerId: VivosStickerId) {
+    setStickerPickerOpen(false)
+    await handleSendSticker(stickerId)
   }
 
   async function handleLogout() {
@@ -172,6 +182,7 @@ export default function ChatScreenIntegrated() {
             value={body}
             onChangeText={setBody}
             onSend={handleSend}
+            onOpenStickers={() => setStickerPickerOpen(true)}
             onCapturePhoto={handleCapturePhoto}
             onCaptureVideo={handleCaptureVideo}
             onPickPhoto={handlePickPhoto}
@@ -181,6 +192,13 @@ export default function ChatScreenIntegrated() {
             attaching={attaching}
           />
         </KeyboardAvoidingView>
+
+        <StickerPicker
+          visible={stickerPickerOpen}
+          sending={sending || attaching}
+          onClose={() => setStickerPickerOpen(false)}
+          onSelect={handleStickerSelect}
+        />
 
         <VivosCallV2Overlay
           callState={callState}
