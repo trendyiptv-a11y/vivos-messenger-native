@@ -18,4 +18,15 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-         
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Cleanup expired attachments
+        env:
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CHAT_ATTACHMENTS_BUCKET: chat-attachments
+          CHAT_ATTACHMENT_CLEANUP_BATCH_SIZE: 100
+        run: node scripts/cleanup-expired-chat-attachments.mjs
