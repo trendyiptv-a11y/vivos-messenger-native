@@ -12,6 +12,9 @@ type MessageRow = {
   attachment_type?: string | null
   attachment_name?: string | null
   attachment_size?: number | null
+  attachment_path?: string | null
+  attachment_expires_at?: string | null
+  attachment_deleted_at?: string | null
 }
 
 type Props = {
@@ -47,8 +50,32 @@ function iconForAttachment(type?: string | null) {
   return "document-attach-outline"
 }
 
+function isAttachmentExpired(msg: MessageRow) {
+  if (msg.attachment_deleted_at) return true
+  if (!msg.attachment_expires_at) return false
+  return new Date(msg.attachment_expires_at).getTime() <= Date.now()
+}
+
 function AttachmentPreview({ msg, mine }: { msg: MessageRow; mine: boolean }) {
-  const url = msg.attachment_url || null
+  const expired = isAttachmentExpired(msg)
+  const url = expired ? null : msg.attachment_url || null
+
+  if (expired) {
+    return (
+      <View style={[styles.attachmentCard, mine ? styles.attachmentCardMine : styles.attachmentCardOther]}>
+        <Ionicons name="time-outline" size={24} color={mine ? "white" : theme.colors.text} />
+        <View style={styles.attachmentTextWrap}>
+          <Text numberOfLines={1} style={[styles.attachmentName, mine ? styles.bubbleTextMine : styles.bubbleTextOther]}>
+            Atașament expirat
+          </Text>
+          <Text style={[styles.attachmentMeta, mine ? styles.bubbleTimeMine : styles.bubbleTimeOther]}>
+            Fișierul a fost șters după 24 ore
+          </Text>
+        </View>
+      </View>
+    )
+  }
+
   if (!url) return null
 
   if (msg.attachment_type === "image") {
@@ -119,7 +146,7 @@ export function MessageBubbleList({ loading, messages, userId }: Props) {
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.messagesWrap}
       maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-      renderItem={({ item, index }) => {
+      renderItem={({ item }) => {
         const chronologicalIndex = messages.findIndex((msg) => msg.id === item.id)
         const previousChronologicalMessage = chronologicalIndex > 0 ? messages[chronologicalIndex - 1] : null
         return <MessageItem msg={item} previousChronologicalMessage={previousChronologicalMessage} userId={userId} />
