@@ -3,6 +3,7 @@ import { FlatList, Image, Linking, Pressable, StyleSheet, Text, View } from "rea
 import { ResizeMode, Video } from "expo-av"
 import { Ionicons } from "@expo/vector-icons"
 import { theme } from "@/lib/theme"
+import { parseVivosStickerBody } from "@/lib/stickers/vivosSmilePack"
 
 type MessageRow = {
   id: string
@@ -133,6 +134,7 @@ function AttachmentPreview({ msg, mine }: { msg: MessageRow; mine: boolean }) {
 function MessageItem({ msg, previousChronologicalMessage, userId }: { msg: MessageRow; previousChronologicalMessage: MessageRow | null; userId: string | null }) {
   const mine = msg.sender_id === userId
   const showDate = !previousChronologicalMessage || formatDay(previousChronologicalMessage.created_at) !== formatDay(msg.created_at)
+  const sticker = parseVivosStickerBody(msg.body)
 
   return (
     <View>
@@ -143,13 +145,23 @@ function MessageItem({ msg, previousChronologicalMessage, userId }: { msg: Messa
           <View style={styles.dayLine} />
         </View>
       ) : null}
-      <View style={[styles.bubbleRow, mine ? styles.bubbleRight : styles.bubbleLeft]}>
-        <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
-          <AttachmentPreview msg={msg} mine={mine} />
-          {msg.body ? <Text style={[styles.bubbleText, mine ? styles.bubbleTextMine : styles.bubbleTextOther]}>{msg.body}</Text> : null}
-          <Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeOther]}>{formatTime(msg.created_at)}</Text>
+
+      {sticker ? (
+        <View style={[styles.bubbleRow, mine ? styles.bubbleRight : styles.bubbleLeft]}>
+          <View style={styles.stickerMessageWrap}>
+            <Image source={sticker.source} style={styles.stickerMessageImage} resizeMode="contain" />
+            <Text style={[styles.stickerTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeOther]}>{formatTime(msg.created_at)}</Text>
+          </View>
         </View>
-      </View>
+      ) : (
+        <View style={[styles.bubbleRow, mine ? styles.bubbleRight : styles.bubbleLeft]}>
+          <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
+            <AttachmentPreview msg={msg} mine={mine} />
+            {msg.body ? <Text style={[styles.bubbleText, mine ? styles.bubbleTextMine : styles.bubbleTextOther]}>{msg.body}</Text> : null}
+            <Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeOther]}>{formatTime(msg.created_at)}</Text>
+          </View>
+        </View>
+      )}
     </View>
   )
 }
@@ -257,6 +269,19 @@ const styles = StyleSheet.create({
   },
   bubbleTimeOther: {
     color: theme.colors.textDim,
+  },
+  stickerMessageWrap: {
+    alignItems: "flex-end",
+    maxWidth: 230,
+  },
+  stickerMessageImage: {
+    width: 190,
+    height: 190,
+  },
+  stickerTime: {
+    marginTop: -4,
+    marginHorizontal: 8,
+    fontSize: 11,
   },
   attachmentImage: {
     width: 210,
