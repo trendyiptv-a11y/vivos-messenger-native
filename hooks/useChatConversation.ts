@@ -20,6 +20,9 @@ type MessageRow = {
   attachment_type?: string | null
   attachment_name?: string | null
   attachment_size?: number | null
+  attachment_path?: string | null
+  attachment_expires_at?: string | null
+  attachment_deleted_at?: string | null
 }
 
 type MemberRow = {
@@ -34,7 +37,12 @@ type NotificationRefRow = {
   ref_id: string | null
 }
 
-const MESSAGE_SELECT = "id, sender_id, body, created_at, attachment_url, attachment_type, attachment_name, attachment_size"
+const MESSAGE_SELECT = "id, sender_id, body, created_at, attachment_url, attachment_type, attachment_name, attachment_size, attachment_path, attachment_expires_at, attachment_deleted_at"
+const ATTACHMENT_TTL_HOURS = 24
+
+function createAttachmentExpiryIso() {
+  return new Date(Date.now() + ATTACHMENT_TTL_HOURS * 60 * 60 * 1000).toISOString()
+}
 
 export function useChatConversation(conversationId: string) {
   const router = useRouter()
@@ -216,6 +224,8 @@ export function useChatConversation(conversationId: string) {
     attachment_type: string
     attachment_name: string
     attachment_size: number | null
+    attachment_path?: string | null
+    attachment_expires_at?: string | null
   }) {
     if (!userId) return null
 
@@ -278,6 +288,8 @@ export function useChatConversation(conversationId: string) {
         attachment_type: uploaded.kind,
         attachment_name: uploaded.name,
         attachment_size: uploaded.size,
+        attachment_path: uploaded.storagePath,
+        attachment_expires_at: createAttachmentExpiryIso(),
       })
 
       if (otherMember?.member_id) {
