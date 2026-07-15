@@ -1,7 +1,8 @@
 -- VIVOS Messenger 24h chat attachment expiry
 -- Run this in Supabase SQL Editor after chat_attachments_setup.sql.
--- New attachments expire after 24 hours. Expired files are removed from Storage
--- when public.cleanup_expired_chat_attachments() is executed.
+-- New attachments expire after 24 hours.
+-- Expired files are removed from Storage by public.cleanup_expired_chat_attachments().
+-- The optional pg_cron block schedules the cleanup hourly.
 
 alter table public.messages
   add column if not exists attachment_path text,
@@ -49,12 +50,32 @@ begin
 end;
 $$;
 
--- Optional, if pg_cron is enabled in your Supabase project:
--- select cron.schedule(
---   'vivos-cleanup-expired-chat-attachments-hourly',
---   '17 * * * *',
---   $$select public.cleanup_expired_chat_attachments();$$
--- );
-
 -- Manual test/run:
--- select public.cleanup_expired_chat_attachments();
+select public.cleanup_expired_chat_attachments();
+
+-- Automatic hourly cleanup.
+-- If this fails with "schema cron does not exist" or similar,
+-- enable pg_cron in Supabase first: Database -> Extensions -> pg_cron.
+create extension if not exists pg_cron with schema extensions;
+
+do $$
+begin
+  if exists (
+    select 1
+    from pg_namespace
+    where nspname = 'cron'
+  ) then
+    perform cron.unschedule(jobid)
+    from cron.job
+    where jobname = 'vivos-cleanup-expired-chat-attachments-hourly';
+
+    perform cron.schedule(
+      'vivos-cleanup-expired-chat-attachments-hourly',
+      '17 * * * *',
+      'select public.cleanup_expired_chat_attachments();'
+    );
+  end if;
+end $$;
+
+-- Check scheduled job:
+-- select jobid, jobname, schedule, command, active from cron.job where jobname = 'vivos-cleanup-expired
