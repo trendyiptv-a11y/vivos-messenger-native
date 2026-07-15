@@ -12,6 +12,7 @@ import {
   PickedChatAttachment,
   uploadChatAttachment,
 } from "@/lib/chatAttachments"
+import { createVivosStickerBody, VivosStickerId } from "@/lib/stickers/vivosSmilePack"
 
 type MessageRow = {
   id: string
@@ -119,9 +120,7 @@ export function useChatConversation(conversationId: string) {
       }
     }
 
-    if (conversationId) {
-      loadConversation()
-    }
+    if (conversationId) loadConversation()
 
     return () => {
       cancelled = true
@@ -167,10 +166,7 @@ export function useChatConversation(conversationId: string) {
 
         if (!notificationIdsToMark.length) return
 
-        await supabase
-          .from("notifications")
-          .update({ is_read: true })
-          .in("id", notificationIdsToMark)
+        await supabase.from("notifications").update({ is_read: true }).in("id", notificationIdsToMark)
       } catch (error) {
         console.warn("markConversationNotificationsRead failed", error)
       }
@@ -246,6 +242,17 @@ export function useChatConversation(conversationId: string) {
     return data?.id as string | undefined
   }
 
+  async function sendPush(text: string, messageId?: string) {
+    if (!otherMember?.member_id) return
+    sendMessagePush({
+      targetUserId: otherMember.member_id,
+      conversationId,
+      senderName: selfName,
+      message: text,
+      messageId,
+    })
+  }
+
   async function handleSend() {
     const text = bodyRef.current.trim()
     if (!text || !userId || sending || attaching) return
@@ -259,17 +266,24 @@ export function useChatConversation(conversationId: string) {
         setBody("")
       }
 
-      if (otherMember?.member_id) {
-        sendMessagePush({
-          targetUserId: otherMember.member_id,
-          conversationId,
-          senderName: selfName,
-          message: text,
-          messageId,
-        })
-      }
+      await sendPush(text, messageId)
     } catch (error) {
       console.warn("send message failed", error)
+    } finally {
+      if (mountedRef.current) setSending(false)
+    }
+  }
+
+  async function handleSendSticker(stickerId: VivosStickerId) {
+    if (!userId || sending || attaching) return
+    setSending(true)
+
+    try {
+      const body = createVivosStickerBody(stickerId)
+      const messageId = await insertMessage(body)
+      await sendPush("Ți-a trimis un sticker VIVOS", messageId)
+    } catch (error) {
+      console.warn("send sticker failed", error)
     } finally {
       if (mountedRef.current) setSending(false)
     }
@@ -294,15 +308,7 @@ export function useChatConversation(conversationId: string) {
         attachment_expires_at: createAttachmentExpiryIso(),
       })
 
-      if (otherMember?.member_id) {
-        sendMessagePush({
-          targetUserId: otherMember.member_id,
-          conversationId,
-          senderName: selfName,
-          message: text,
-          messageId,
-        })
-      }
+      await sendPush(text, messageId)
     } catch (error) {
       console.warn("send attachment failed", error)
     } finally {
@@ -323,6 +329,7 @@ export function useChatConversation(conversationId: string) {
     otherName,
     selfName,
     handleSend,
+    handleSendSticker,
     handleCapturePhoto: () => sendAttachment(captureChatPhoto),
     handleCaptureVideo: () => sendAttachment(captureChatVideo),
     handlePickPhoto: () => sendAttachment(pickChatPhoto),
