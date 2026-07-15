@@ -4,6 +4,7 @@
 -- IMPORTANT: Supabase blocks direct deletion from storage.objects.
 -- Actual file deletion must be done through the Supabase Storage API.
 -- This SQL only adds metadata columns, an index, and a helper view for external cleanup jobs.
+-- The helper view is SECURITY INVOKER so Supabase Security Advisor does not flag it.
 
 alter table public.messages
   add column if not exists attachment_path text,
@@ -14,7 +15,11 @@ create index if not exists messages_attachment_expiry_idx
   on public.messages (attachment_expires_at)
   where attachment_path is not null and attachment_deleted_at is null;
 
-create or replace view public.expired_chat_attachments as
+drop view if exists public.expired_chat_attachments;
+
+create view public.expired_chat_attachments
+with (security_invoker = true)
+as
 select
   id,
   conversation_id,
