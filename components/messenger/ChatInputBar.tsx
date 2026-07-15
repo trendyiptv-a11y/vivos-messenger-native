@@ -7,6 +7,7 @@ type Props = {
   value: string
   onChangeText: (value: string) => void
   onSend: () => void
+  onOpenStickers: () => void
   onCapturePhoto: () => void
   onCaptureVideo: () => void
   onPickPhoto: () => void
@@ -20,6 +21,7 @@ export function ChatInputBar({
   value,
   onChangeText,
   onSend,
+  onOpenStickers,
   onCapturePhoto,
   onCaptureVideo,
   onPickPhoto,
@@ -41,6 +43,10 @@ export function ChatInputBar({
       <View style={styles.inputBar}>
         <Pressable disabled={attaching} onPress={() => setMenuOpen(true)} style={[styles.attachButton, attaching && styles.sendButtonDisabled]}>
           <Ionicons name={attaching ? "cloud-upload-outline" : "add"} size={24} color="white" />
+        </Pressable>
+
+        <Pressable disabled={sending || attaching} onPress={onOpenStickers} style={[styles.stickerButton, (sending || attaching) && styles.sendButtonDisabled]}>
+          <Ionicons name="happy-outline" size={23} color="white" />
         </Pressable>
 
         <TextInput
@@ -92,8 +98,8 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 10,
-    paddingHorizontal: 20,
+    gap: 8,
+    paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 18,
     borderTopWidth: 1,
@@ -101,9 +107,19 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(18,46,84,0.96)",
   },
   attachButton: {
-    width: 48,
+    width: 46,
     height: 52,
-    borderRadius: 24,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  stickerButton: {
+    width: 46,
+    height: 52,
+    borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.12)",
