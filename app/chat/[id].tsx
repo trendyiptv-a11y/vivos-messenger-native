@@ -173,7 +173,10 @@ export default function ChatScreenIntegrated() {
           </View>
         ) : null}
 
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
           <View style={styles.messagesWrap}>
             <MessageBubbleList loading={loading} messages={messages} userId={userId} />
           </View>
@@ -237,6 +240,6 @@ const styles = StyleSheet.create({
   },
   messagesWrap: {
     flex: 1,
-    minHeight: 320,
+    minHeight: 0,
   },
 })
